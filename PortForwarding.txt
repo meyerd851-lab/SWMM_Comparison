@@ -1,0 +1,13 @@
+python -m http.server 8000 --bind 0.0.0.0
+
+
+# show the listener(s) on 8000
+lsof -iTCP:8000 -sTCP:LISTEN -n -P
+
+# kill by PID (replace ####)
+kill -9 ####
+
+# or one-liners by process name (pick what you use)
+pkill -f "python -m http.server 8000"   # Python simple server
+pkill -f "http-server .* -p 8000"       # npx http-server
+pkill -f "vite"                         # Vite/dev server
