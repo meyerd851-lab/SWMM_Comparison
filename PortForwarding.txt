@@ -11,3 +11,4 @@ kill -9 ####
 pkill -f "python -m http.server 8000"   # Python simple server
 pkill -f "http-server .* -p 8000"       # npx http-server
 pkill -f "vite"                         # Vite/dev server
+
