@@ -16,23 +16,23 @@
   <script src="https://cdn.jsdelivr.net/npm/proj4@2.11.0/dist/proj4.js"></script>
 
   <style>
-    :root { --blue:#2b579a; --gray:#7f8c8d; --green:#2ecc71; --red:#e74c3c; --orange:#f39c12;}
+    :root { --blue:#05275a; --gray:#7f8c8d; --green:#2ecc71; --red:#e74c3c; --orange:#f39c12;}
     * { box-sizing: border-box; }
     html, body { height: 100%; }
     body { font-family: Segoe UI, system-ui, sans-serif; margin:0; color:#222; font-size: 14px; }
-    header { display: flex; align-items: center; gap:10px; padding: 0 14px; height: 50px; background:#f6f6f6; border-bottom:1px solid #e3e3e3; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
-    h1 { margin:0; font-size:18px; color:var(--blue); }
+    header { display: flex; align-items: center; gap:10px; padding: 0 14px; height: 50px; background:var(--blue); color: #fff; border-bottom:1px solid #e3e3e3; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+    h1 { margin:0; font-size:18px; color: #fff; }
     header img { height: 28px; width: 28px; }
     header > .btn-group { display:flex; gap: 4px; }
     #app-title-group { margin-left: auto; display: flex; align-items: center; gap: 10px; }
 
     /* New Dropdown Menu Styles */
     .menu { position: relative; }
-    .menu-btn { padding: 6px 12px; border-radius: 6px; cursor: pointer; font-weight: 500; }
-    .menu-btn:hover { background-color: #e0e0e0; }
+    .menu-btn { padding: 6px 12px; border-radius: 6px; cursor: pointer; font-weight: 500; color: #fff; }
+    .menu-btn:hover { background-color: #fff; color: #000; }
     .menu-content {
       display: none; position: absolute; top: 100%; left: 0; background: #fff;
-      border: 1px solid #ccc; box-shadow: 0 4px 8px rgba(0,0,0,0.1); border-radius: 4px;
+      border: 1px solid #ccc; box-shadow: 0 4px 8px rgba(0,0,0,0.1); border-radius: 4px; color: #222;
       min-width: 200px; z-index: 1000; padding: 4px;
     }
     .menu:hover .menu-content { display: block; }
@@ -43,12 +43,12 @@
 
     input[type=file]{ display: none; } /* Hide default file inputs */
     button { padding:8px 12px; border-radius:8px; border:1px solid #d0d0d0; background:#fff; cursor:pointer; font-size: 14px; }
-    button.primary{ background:var(--blue); color:#fff; border-color:var(--blue);}
+    button.primary{ background:#fff; color:var(--blue); border-color:#fff; font-weight: 600; }
     #wrap { display:grid; grid-template-columns: 340px 1fr; gap:12px; padding:12px; height: calc(100vh - 51px); min-height:0; }
 
     /* New styles for dropdown-like buttons and file inputs */
     .dropdown-btn, .file-btn-label {
-      padding: 8px 12px; border-radius: 8px; border: 1px solid #d0d0d0; background: #fff; cursor: pointer;
+      padding: 8px 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.5); background: transparent; color: #fff; cursor: pointer;
       display: inline-flex; align-items: center; gap: 8px;
     }
     .dropdown-btn::after {
@@ -91,7 +91,7 @@
     .pill.changed { background:#fff6e6; color:#935c00; border:1px solid #ffe0a8; }
     .row { cursor:pointer; }
     .row:hover { background:#f6f9ff; }
-    #status { color:#666; }
+    #status { color:rgba(255,255,255,0.85); }
 
     #modalBackdrop{position:fixed;inset:0;background:rgba(0,0,0,.35);display:none;align-items:center;justify-content:center;z-index:9999;}
     #modal{background:#fff;border-radius:10px;border:1px solid #ddd;max-width:900px;width:90vw;max-height:80vh;display:flex;flex-direction:column;}
