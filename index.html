@@ -205,6 +205,14 @@
           </select>
         </label>
         <hr>
+        <label>Coordinate System:
+          <select id="crsSelect" title="Coordinate System" style="width:100%; margin-top:4px; padding: 4px;">
+            <option value="EPSG:3735" selected>NAD83 / Ohio South (ftUS)</option>
+            <option value="EPSG:3733">NAD83 / Ohio North (ftUS)</option>
+            <option value="EPSG:6499">NAD83 / Michigan South (ft)</option>
+          </select>
+        </label>
+        <hr>
         <label class="menu-item"><input type="checkbox" id="labelsToggle"> Show Labels</label>
       </div>
     </div>
@@ -381,9 +389,22 @@
   </div>
 
   <script>
-    proj4.defs("EPSG:3735",
-      "+proj=lcc +lat_0=38 +lon_0=-82.5 +lat_1=40.0333333333333 +lat_2=38.7333333333333 +x_0=600000 +y_0=0 +ellps=GRS80 +units=us-ft +no_defs +type=crs"
-    );
+    const PROJECTIONS = {
+      "EPSG:3735": "+proj=lcc +lat_0=38 +lon_0=-82.5 +lat_1=40.0333333333333 +lat_2=38.7333333333333 +x_0=600000 +y_0=0 +ellps=GRS80 +units=us-ft +no_defs +type=crs",
+      "EPSG:3733": "+proj=lcc +lat_0=39.6666666666667 +lon_0=-82.5 +lat_1=41.7 +lat_2=40.4333333333333 +x_0=600000 +y_0=0 +ellps=GRS80 +units=us-ft +no_defs +type=crs",
+      "EPSG:6499": "+proj=lcc +lat_0=41.5 +lon_0=-84.3666666666667 +lat_1=43.6666666666667 +lat_2=42.1 +x_0=3999999.999984 +y_0=0 +ellps=GRS80 +units=ft +no_defs +type=crs"
+    };
+
+    let CURRENT_CRS = "EPSG:3735";
+    proj4.defs(CURRENT_CRS, PROJECTIONS[CURRENT_CRS]);
+
+    document.getElementById('crsSelect').addEventListener('change', (e) => {
+      CURRENT_CRS = e.target.value;
+      proj4.defs(CURRENT_CRS, PROJECTIONS[CURRENT_CRS]);
+      if (LAST.json) {
+        drawGeometry(LAST.json);
+      }
+    });
 
     const SESSION_VERSION = 1;
     let FILES = { f1Name:null, f2Name:null, f1Bytes:null, f2Bytes:null };
@@ -420,6 +441,7 @@
         result: LAST.json,
         ui: {
           section: LAST.currentSection || null,
+          crs: CURRENT_CRS,
           filters: {
             Added:   document.getElementById('fAdded').checked,
             Removed: document.getElementById('fRemoved').checked,
@@ -464,6 +486,11 @@
       document.getElementById('fRemoved').checked = f?.Removed ?? true;
       document.getElementById('fChanged').checked = f?.Changed ?? true;
       if (typeof f.Search  === 'string')   document.getElementById('search').value = f.Search;
+
+      if (ui.crs && PROJECTIONS[ui.crs]) {
+        document.getElementById('crsSelect').value = ui.crs;
+        document.getElementById('crsSelect').dispatchEvent(new Event('change'));
+      }
     }
 
     function relabelHeaders(section, hdrs){
@@ -485,9 +512,9 @@
 
     function restoreFromResult(result, ui){
       LAST.json = result;
+      applyUIState(ui); // Apply UI state (including CRS) first
       renderSections(result);
       drawGeometry(result);
-      applyUIState(ui);
       if (ui?.section && result.diffs[ui.section]) {
         LAST.currentSection = ui.section;
         document.getElementById('currentSectionLabel').textContent = ui.section;
@@ -690,7 +717,7 @@
     }
 
     function xyToLatLng(x, y) {
-      const [lon, lat] = proj4("EPSG:3735", "EPSG:4326", [x, y]);
+      const [lon, lat] = proj4(CURRENT_CRS, "EPSG:4326", [x, y]);
       return [lat, lon];
     }
 
@@ -813,17 +840,21 @@
         subs: new Set([...sets.subs.base ].filter(x=>!sets.subs.added.has(x) &&!sets.subs.removed.has(x) &&!sets.subs.changed.has(x)))
       };
 
-      const nodeIdToSection = {};
       const nodeSections = ["JUNCTIONS", "OUTFALLS", "DIVIDERS", "STORAGE"];
+      const nodeIdToSection = {};
+      // Build a complete map of all node IDs to their section by looking in the original parsed sections from file 1.
+      // This is necessary to correctly identify the type of UNCHANGED nodes.
       for (const sec of nodeSections) {
-        for (const id of Object.keys(json.diffs[sec]?.added || {}))   nodeIdToSection[id] = sec;
-        for (const id of Object.keys(json.diffs[sec]?.removed || {})) nodeIdToSection[id] = sec;
-        for (const id of Object.keys(json.diffs[sec]?.changed || {})) nodeIdToSection[id] = sec;
+        if (json.sections1 && json.sections1[sec]) {
+          for (const id in json.sections1[sec]) {
+            nodeIdToSection[id] = sec;
+          }
+        }
       }
 
       const drawNode=(id,xy,color,target)=>{
         const ll = xyToLatLng(xy[0],xy[1]);
-        const sec = nodeIdToSection[id] || "JUNCTIONS"; // Default to junction if not in diffs
+        const sec = nodeIdToSection[id] || "JUNCTIONS"; // Default to junction if not found
         const shape = sec === 'OUTFALLS' ? 'triangle' : sec === 'STORAGE' ? 'square' : 'circle';
         const icon = createNodeIcon(color, shape);
         const marker = L.marker(ll, { icon });
@@ -858,16 +889,6 @@
       for (const id of sets.links.removed) if (geom.links1?.[id]) drawLink(id, geom.links1[id], C.removed, "removed");
       for (const id of unchanged.subs) if (geom.subs1?.[id]) drawSub(id, geom.subs1[id], C.unchanged, "unchanged");
       for (const id of sets.subs.removed) if (geom.subs1?.[id]) drawSub(id, geom.subs1[id], C.removed, "removed");
-
-
-      for (const id of unchanged.nodes) {
-        for (const sec of nodeSections) {
-        
-          if (LAST.json.diffs[sec] && id in (LAST.json.diffs[sec].base1 || {})) {
-             nodeIdToSection[id] = sec;
-          }
-        }
-      }
 
       for (const id of sets.nodes.changed) { const xy=geom.nodes2?.[id]; if (xy) drawNode(id, xy, C.changed, "changed");}
       for (const id of sets.nodes.added) if (geom.nodes2?.[id]) drawNode(id, geom.nodes2[id], C.added, "added");
@@ -1397,5 +1418,6 @@
       alert("Row JSON copied.");
     }
   </script>
+  
 </body>
 </html>

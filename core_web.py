@@ -513,6 +513,8 @@ def run_compare(file1_bytes, file2_bytes) -> str:
         "headers": headers,
         "renames": renames,
         "geometry": geom,
+        "sections1": pr1.sections,
+        "sections2": pr2.sections,
         "hydrographs": hydrographs,  # <— include here
     }
     return json.dumps(out)
