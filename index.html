@@ -300,6 +300,21 @@
     document.addEventListener('DOMContentLoaded', makeResizable);
 
   </script>
+  <script>
+    // Simple throttle function to limit how often a function can be called.
+    function throttle(func, limit) {
+      let inThrottle;
+      return function() {
+        const args = arguments;
+        const context = this;
+        if (!inThrottle) {
+          func.apply(context, args);
+          inThrottle = true;
+          setTimeout(() => inThrottle = false, limit);
+        }
+      };
+    }
+  </script>
 
   <div id="wrap">
     <!-- Left Panel: Sections -->
@@ -677,9 +692,16 @@
       const [b1, b2] = await Promise.all([f1.arrayBuffer(), f2.arrayBuffer()]);
       FILES.f1Bytes = b1; FILES.f2Bytes = b2;
       
-    });
+    }); // This is the duplicate 'go' event listener, removing it.
+    let LAST = { json:null, currentSection:null }; // Moved LAST declaration here to ensure it's initialized early.
+    // Use canvas renderer for better performance with large datasets
+    const map = L.map('map', { zoomControl:true, maxZoom: 22, renderer: L.canvas() }).setView([39.1031, -84.5120], 12);
 
-    const map = L.map('map', { zoomControl:true, maxZoom: 22 }).setView([39.1031, -84.5120], 12);
+    // Create panes to control rendering order (subs < links < nodes)
+    map.createPane('subcatchmentPane').style.zIndex = 380;
+    map.createPane('linkPane').style.zIndex = 390;
+    map.createPane('nodePane').style.zIndex = 410; // Above default overlayPane (400)
+
 
     const baseLayers = {
       street: L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -721,8 +743,6 @@
       return [lat, lon];
     }
 
-    let LAST = { json:null, currentSection:null };
-
     const secType = (sec) => (["JUNCTIONS","OUTFALLS","DIVIDERS","STORAGE"].includes(sec) ? "nodes" :
                               ["CONDUITS","PUMPS","ORIFICES","WEIRS","OUTLETS"].includes(sec) ? "links" :
                               sec==="SUBCATCHMENTS" ? "subs" : null);
@@ -747,6 +767,7 @@
     }
 
     const labelsLayer = L.layerGroup().addTo(map);
+    const LABEL_ZOOM_THRESHOLD = 17;
 
     function midOfLine(coords){
       if (!coords || coords.length === 0) return null;
@@ -782,47 +803,45 @@
     function drawLabels(json){
       labelsLayer.clearLayers();
       if (!document.getElementById('labelsToggle').checked) return;
+      if (map.getZoom() < LABEL_ZOOM_THRESHOLD) return;
 
       const geom = json.geometry;
+      const bounds = map.getBounds();
 
       const nodeKeys = new Set([...(Object.keys(geom.nodes2||{})), ...(Object.keys(geom.nodes1||{}))]);
       nodeKeys.forEach(id=>{
         const xy = (geom.nodes2 && geom.nodes2[id]) || (geom.nodes1 && geom.nodes1[id]);
         if (!xy) return;
-        const ll = xyToLatLng(xy[0], xy[1]); L.tooltip({ permanent: true, direction: 'top', className: 'map-label', offset: [0, -5] })
-          .setLatLng(ll).setContent(id).addTo(labelsLayer);
+        const ll = xyToLatLng(xy[0], xy[1]);
+        if (bounds.contains(ll)) {
+          L.tooltip({ permanent: true, direction: 'top', className: 'map-label', offset: [0, -5] })
+            .setLatLng(ll).setContent(id).addTo(labelsLayer);
+        }
       });
 
       const subKeys = new Set([...(Object.keys(geom.subs2||{})), ...(Object.keys(geom.subs1||{}))]);
       subKeys.forEach(id=>{
         const coords = (geom.subs2 && geom.subs2[id]) || (geom.subs1 && geom.subs1[id]);
         if (!coords || coords.length < 3) return;
-        const center = centroidOfPoly(coords);
-        const ll = xyToLatLng(center[0], center[1]);
-        L.tooltip({ permanent: true, direction: 'center', className: 'map-label' }).setLatLng(ll).setContent(id).addTo(labelsLayer);
+        const centerXY = centroidOfPoly(coords);
+        const ll = xyToLatLng(centerXY[0], centerXY[1]);
+        if (bounds.contains(ll)) {
+          L.tooltip({ permanent: true, direction: 'center', className: 'map-label' }).setLatLng(ll).setContent(id).addTo(labelsLayer);
+        }
       });
     }
 
     document.getElementById('labelsToggle').addEventListener('change', ()=>{
       if (!LAST.json) return;
-      drawLabels(LAST.json);
+      throttledDrawLabels();
     });
 
-    function createNodeIcon(color, shape = 'circle') {
-      let svg;
-      const r = 5, w = 12, h = 12; // radius, width, height
-      const style = `fill="${color}" stroke="#000" stroke-width="1"`;
+    const throttledDrawLabels = throttle(() => {
+      if (!LAST.json) return;
+      drawLabels(LAST.json);
+    }, 200);
 
-      if (shape === 'triangle') {
-        svg = `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}"><path d="M${w/2},1 L${w-1},${h-1} L1,${h-1} Z" ${style}/></svg>`;
-      } else if (shape === 'square') {
-        svg = `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}"><rect x="1" y="1" width="${w-2}" height="${h-2}" ${style}/></svg>`;
-      } else { // circle
-        svg = `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}"><circle cx="${w/2}" cy="${h/2}" r="${r-1}" ${style}/></svg>`;
-      }
-
-      return L.divIcon({ html: svg, className: '', iconSize: [w, h], iconAnchor: [w/2, h/2] });
-    }
+    map.on('zoomend moveend', throttledDrawLabels);
 
     function drawGeometry(json) {
       resetLayers();
@@ -854,10 +873,11 @@
 
       const drawNode=(id,xy,color,target)=>{
         const ll = xyToLatLng(xy[0],xy[1]);
-        const sec = nodeIdToSection[id] || "JUNCTIONS"; // Default to junction if not found
-        const shape = sec === 'OUTFALLS' ? 'triangle' : sec === 'STORAGE' ? 'square' : 'circle';
-        const icon = createNodeIcon(color, shape);
-        const marker = L.marker(ll, { icon });
+        // Use circleMarker for performance. It renders on canvas.
+        const sec = nodeIdToSection[id] || "JUNCTIONS";
+        const marker = L.circleMarker(ll, {
+          radius: 5, color: "#000", weight: 1, fillColor: color, fillOpacity: 1, pane: 'nodePane'
+        });
         marker.swmmInfo = { id, section: sec, type: 'node' };
         marker.addTo(layers.nodes[target]);
       };
@@ -865,20 +885,20 @@
       const linkIdToSection = {};
       const linkSections = ["CONDUITS", "PUMPS", "ORIFICES", "WEIRS", "OUTLETS"];
       for (const sec of linkSections) {
-        for (const id of Object.keys(json.diffs[sec]?.base1 || {})) linkIdToSection[id] = sec;
-        for (const id of Object.keys(json.diffs[sec]?.base2 || {})) linkIdToSection[id] = sec;
+        if (json.sections1 && json.sections1[sec]) for (const id in json.sections1[sec]) linkIdToSection[id] = sec;
+        if (json.sections2 && json.sections2[sec]) for (const id in json.sections2[sec]) linkIdToSection[id] = sec;
       }
 
       const drawLink=(id,coords,color,target)=>{
         const ll=coords.map(p=>xyToLatLng(p[0],p[1]));
-        const polyline = L.polyline(ll,{color,weight:3,opacity:.95});
+        const polyline = L.polyline(ll,{color,weight:3,opacity:.95, pane: 'linkPane'});
         const sec = linkIdToSection[id] || 'CONDUITS'; // Default to CONDUITS if not found
         polyline.swmmInfo = { id, section: sec, type: 'link' };
         polyline.addTo(layers.links[target]);
       };
       const drawSub=(id,coords,color,target)=>{
         const ll=coords.map(p=>xyToLatLng(p[0],p[1]));
-        const polygon = L.polygon(ll,{color,weight:2,fill:true,fillOpacity:.25});
+        const polygon = L.polygon(ll,{color,weight:2,fill:true,fillOpacity:.25, pane: 'subcatchmentPane'});
         polygon.swmmInfo = { id, section: 'SUBCATCHMENTS', type: 'sub' };
         polygon.addTo(layers.subs[target]);
       };
@@ -903,7 +923,7 @@
       pushAll(geom.nodes1); pushAll(geom.nodes2); pushAll(geom.links1); pushAll(geom.links2); pushAll(geom.subs1); pushAll(geom.subs2);
       if (anyLL.length) map.fitBounds(L.latLngBounds(anyLL), { padding:[20,20] });
 
-      drawLabels(json);
+      throttledDrawLabels();
     }
 
     function groupHydroSummary(d) {
@@ -1215,7 +1235,7 @@
         if (!layer.swmmInfo) return;
 
         let distance = Infinity;
-        if (layer instanceof L.Marker) {
+        if (layer instanceof L.Marker || layer instanceof L.CircleMarker) {
           distance = latlng.distanceTo(layer.getLatLng());
         } else if (layer instanceof L.Polyline) {
           const latlngs = layer.getLatLngs();
