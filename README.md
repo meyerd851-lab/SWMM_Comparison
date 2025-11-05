@@ -39,3 +39,9 @@ Export: SheetJS (xlsx)
 Hosting: GitHub Pages
 
 Pyodide: Allows Python code to execute natively in the browser, letting the app perform complex model comparisons locally on your device without any external processing.
+
+**TO DO:**
+- Compare descriptions & Tags
+- Merge baseflow/average flow & pattern changes to node table.
+- Add ability to see unchanged element attributes
+
