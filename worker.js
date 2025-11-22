@@ -27,15 +27,21 @@ self.onmessage = async (ev) => {
       self.postMessage({ type: "progress", payload: "Running comparison in Python…" });
 
       // Convert ArrayBuffers -> Python bytes
+      const tolerancesJS = msg.tolerances || {};
+      const hasTolerances = Object.keys(tolerancesJS).length > 0;
+
       const py_b1 = pyodide.toPy(new Uint8Array(msg.file1));
       const py_b2 = pyodide.toPy(new Uint8Array(msg.file2));
+      const py_tolerances = hasTolerances ? pyodide.toPy(tolerancesJS) : undefined;
+
       try {
-        const out = core.run_compare(py_b1, py_b2); // returns JSON string
+        const out = core.run_compare(py_b1, py_b2, py_tolerances);
         const jsOut = out.toString();
         self.postMessage({ type: "result", payload: jsOut });
       } finally {
         py_b1.destroy();
         py_b2.destroy();
+        if (py_tolerances) py_tolerances.destroy();
       }
       return;
     }
