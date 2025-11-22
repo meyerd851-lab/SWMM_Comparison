@@ -914,15 +914,153 @@ def compare_sections(secs1: Dict[str, Dict[str, List[str]]],
         added = sorted(keys2 - keys1)
         removed = sorted(keys1 - keys2)
         changed = {k: (recs1[k], recs2[k]) for k in (keys1 & keys2) if recs1.get(k) != recs2.get(k)}
+
         if added or removed or changed:
             out[sec] = DiffSection(added, removed, changed)
             all_headers[sec] = headers1.get(sec) or headers2.get(sec, [])
     return out, all_headers
 
+def _calculate_field_diffs(old_vals: List[str], new_vals: List[str], headers: List[str], section: str) -> Dict[str, float]:
+    """Calculates numerical differences for specific fields in changed records."""
+    diffs = {}
+    if not headers:
+        return diffs
+
+    def get_val(values: List[str], index: int) -> Optional[float]:
+        try:
+            if index < len(values):
+                return float(values[index])
+        except (ValueError, TypeError):
+            pass
+        return None
+
+    if section == "CONDUITS":
+        fields_to_diff = {"Length": 2, "InOffset": 4, "OutOffset": 5}
+        for field, idx in fields_to_diff.items():
+            old_v, new_v = get_val(old_vals, idx), get_val(new_vals, idx)
+            if old_v is not None and new_v is not None:
+                diffs[field] = new_v - old_v
+
+    elif section == "JUNCTIONS":
+        # Field names are from headers, but we use hardcoded indices for robustness
+        # Headers: "Name", "InvertElev", "MaxDepth", ...
+        # Values: [InvertElev, MaxDepth, ...]
+        invert_idx, max_depth_idx = 0, 1
+
+        old_invert = get_val(old_vals, invert_idx)
+        new_invert = get_val(new_vals, invert_idx)
+        if old_invert is not None and new_invert is not None:
+            diffs["InvertElev"] = new_invert - old_invert
+
+        old_max_depth = get_val(old_vals, max_depth_idx)
+        new_max_depth = get_val(new_vals, max_depth_idx)
+        if old_max_depth is not None and new_max_depth is not None:
+            diffs["MaxDepth"] = new_max_depth - old_max_depth
+
+        # Autocalculated RimElevation
+        if old_invert is not None and old_max_depth is not None:
+            diffs["RimElevation_old"] = old_invert + old_max_depth
+        if new_invert is not None and new_max_depth is not None:
+            diffs["RimElevation_new"] = new_invert + new_max_depth
+        if "RimElevation_old" in diffs and "RimElevation_new" in diffs:
+            diffs["RimElevation_diff"] = diffs["RimElevation_new"] - diffs["RimElevation_old"]
+
+    return diffs
+
+def _filter_changes_by_tolerance(diffs: Dict[str, DiffSection], tolerances: Dict[str, float]):
+    """
+    Post-process the 'changed' items in a diffs object, removing any items
+    where all numerical differences fall within the specified tolerances.
+    """
+    if not tolerances:
+        print("[DEBUG] No tolerances provided, skipping filter.")
+        return
+
+    # Check if any tolerance values are actually set (non-zero)
+    has_any_tolerance = any(v > 0 for v in tolerances.values() if isinstance(v, (int, float)))
+    if not has_any_tolerance:
+        print("[DEBUG] All tolerance values are 0 or invalid, skipping filter.")
+        return
+
+    def get_float(val_str: str) -> Optional[float]:
+        try:
+            return float(val_str)
+        except (ValueError, TypeError):
+            return None
+
+    print(f"[DEBUG] Filtering with tolerances: {tolerances}")
+    print(f"[DEBUG] CONDUIT_LENGTH tolerance: {tolerances.get('CONDUIT_LENGTH', 0)}")
+
+    for sec, diff_section in diffs.items():
+        ids_to_remove = []
+        for item_id, (old_vals, new_vals) in diff_section.changed.items():
+            max_len = max(len(old_vals), len(new_vals))
+            old_padded = old_vals + [""] * (max_len - len(old_vals))
+            new_padded = new_vals + [""] * (max_len - len(new_vals))
+
+            # Track which fields are within tolerance vs truly different
+            fields_within_tolerance = set()
+            is_truly_different = False
+            
+            for i in range(max_len):
+                v1, v2 = old_padded[i], new_padded[i]
+                if v1 == v2:
+                    continue
+
+                # Check for numerical tolerance
+                v1_f, v2_f = get_float(v1), get_float(v2)
+                if v1_f is not None and v2_f is not None:
+                    field_within_tol = False
+                    if sec == "CONDUITS":
+                        if i == 2: # Length (index 2: FromNode=0, ToNode=1, Length=2)
+                            tol = tolerances.get("CONDUIT_LENGTH", 0)
+                            if tol > 0 and abs(v1_f - v2_f) <= tol:
+                                print(f"[DEBUG] [{sec}] {item_id}: Field {i} (Length): |{v1_f} - {v2_f}| = {abs(v1_f - v2_f)} <= {tol}. Within tolerance.")
+                                fields_within_tolerance.add(i)
+                                field_within_tol = True
+                        elif i in (4, 5): # In/Out Offset (index 4=InOffset, 5=OutOffset)
+                            tol = tolerances.get("CONDUIT_OFFSET", 0)
+                            if tol > 0 and abs(v1_f - v2_f) <= tol:
+                                print(f"[DEBUG] [{sec}] {item_id}: Field {i} (Offset): |{v1_f} - {v2_f}| = {abs(v1_f - v2_f)} <= {tol}. Within tolerance.")
+                                fields_within_tolerance.add(i)
+                                field_within_tol = True
+                    elif sec == "JUNCTIONS":
+                        if i == 0: # InvertElev
+                            tol = tolerances.get("JUNCTION_INVERT", 0)
+                            if tol > 0 and abs(v1_f - v2_f) <= tol:
+                                fields_within_tolerance.add(i)
+                                field_within_tol = True
+                        elif i == 1: # MaxDepth
+                            tol = tolerances.get("JUNCTION_DEPTH", 0)
+                            if tol > 0 and abs(v1_f - v2_f) <= tol:
+                                fields_within_tolerance.add(i)
+                                field_within_tol = True
+                    
+                    if field_within_tol:
+                        continue  # Skip this field, it's within tolerance
+
+                
+                #print(f"[DEBUG] [{sec}] {item_id}: Field {i}: Found significant difference: '{v1}' vs '{v2}'")
+                is_truly_different = True
+                break
+
+            if not is_truly_different:
+                #print(f"[DEBUG] [{sec}] {item_id}: All differences within tolerance. Removing from changed set.")
+                ids_to_remove.append(item_id)
+            elif fields_within_tolerance:
+                pass  # placeholder so Python has a valid block
+                #print(f"[DEBUG] [{sec}] {item_id}: Some fields within tolerance, but others changed. Keeping in changed set.")
+
+        for item_id in ids_to_remove:
+            del diff_section.changed[item_id]
+        
+        if ids_to_remove:
+            print(f"[DEBUG] [{sec}]: Removed {len(ids_to_remove)} item(s) that were within tolerance.")
+
 # =========================
 # Public entrypoint for the web worker
 # =========================
-def run_compare(file1_bytes, file2_bytes) -> str:
+def run_compare(file1_bytes, file2_bytes, tolerances_py=None) -> str:
     f1 = _to_text_io(file1_bytes)
     f2 = _to_text_io(file2_bytes)
 
@@ -935,11 +1073,25 @@ def run_compare(file1_bytes, file2_bytes) -> str:
     g1 = parse_swmm_geometry_filelike(f1)
     g2 = parse_swmm_geometry_filelike(f2)
 
+    # --- START FIX ---
+    # Handle tolerances whether passed as a JS Proxy or a generic Python dict
+    tolerances = {}
+    if tolerances_py is not None:
+        if hasattr(tolerances_py, 'to_py'):
+            # It's a JS Proxy (passed directly from JS)
+            tolerances = tolerances_py.to_py()
+        else:
+            # It's already a Python dictionary (converted in JS via pyodide.toPy)
+            tolerances = tolerances_py
+
     # Spatial reconciliation (renames applied to pr2 in place)
     renames = spatial_reconcile_and_remap_using_geom(pr1, pr2, g1, g2)
 
     # Compare after reconciliation
     diffs, headers = compare_sections(pr1.sections, pr2.sections, pr1.headers, pr2.headers)
+
+    # Post-process: filter out changes that are within tolerance
+    _filter_changes_by_tolerance(diffs, tolerances)
 
     # Summary rows for the left panel
     summary_rows = [
@@ -958,7 +1110,13 @@ def run_compare(file1_bytes, file2_bytes) -> str:
             # REMOVED: values from file1
             "removed": { rid: (s1.get(rid, []) or []) for rid in d.removed },
             # CHANGED: [old, new]
-            "changed": { rid: [d.changed[rid][0], d.changed[rid][1]] for rid in d.changed }
+            "changed": {
+                rid: {
+                    "values": [d.changed[rid][0], d.changed[rid][1]],
+                    "diff_values": _calculate_field_diffs(d.changed[rid][0], d.changed[rid][1], headers.get(sec, []), sec)
+                }
+                for rid in d.changed
+            }
         }
 
     # expose full hydrograph maps so the UI can build the 3x6 drill-down like desktop

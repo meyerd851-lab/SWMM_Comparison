@@ -8,179 +8,9 @@
 
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-
   <script src="https://cdn.jsdelivr.net/npm/proj4@2.11.0/dist/proj4.js"></script>
-
   <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
-
-  <style>
-    /* =================================
-       GLOBAL & LAYOUT
-       ================================= */
-    :root { --blue:#05275a; --gray:#7f8c8d; --green:#2ecc71; --red:#e74c3c; --orange:#f39c12;}
-    * { box-sizing: border-box; }
-    html, body { height: 100%; }
-    body { font-family: Segoe UI, system-ui, sans-serif; margin:0; color:#222; font-size: 14px; }
-    header { display: flex; align-items: center; gap:10px; padding: 0 14px; height: 50px; background:var(--blue); color: #fff; border-bottom:1px solid #e3e3e3; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
-    h1 { margin:0; font-size:18px; color: #fff; }
-    header img {
-      height: 32px;
-      width: 32px;
-      background: #fff;
-      border-radius: 5px;
-      padding: 1px;
-    }
-    header > .btn-group { display:flex; gap: 4px; }
-    #wrap { display:grid; grid-template-columns: 340px 5px 1fr; gap:0; padding:12px; height: calc(100vh - 51px); min-height:0; }
-    #left { padding-right: 12px; }
-    #right { padding-left: 12px; }
-
-    .splitter { background: #eee; }
-    .v-splitter { cursor: col-resize; }
-    .h-splitter { cursor: row-resize; }
-    .v-splitter:hover, .h-splitter:hover { background: var(--blue); }
-    body.resizing-v { cursor: col-resize; user-select: none; }
-    body.resizing-h { cursor: row-resize; user-select: none; }
-
-    #app-title-group { margin-left: auto; display: flex; align-items: center; gap: 10px; }
-
-    .menu { position: relative; }
-    .menu-btn { padding: 6px 12px; border-radius: 6px; cursor: pointer; font-weight: 500; color: #fff; }
-    .menu-btn:hover { background-color: #fff; color: #000; }
-    /* New Dropdown Menu Styles */
-    .menu-content {
-      display: none; position: absolute; top: 100%; left: 0; background: #fff;
-      border: 1px solid #ccc; box-shadow: 0 4px 8px rgba(0,0,0,0.1); border-radius: 4px; color: #222;
-      min-width: 200px; z-index: 1000; padding: 4px;
-    }
-    .menu:hover .menu-content { display: block; }
-    .menu-item { display: block; width: 100%; text-align: left; padding: 8px 12px; border: none; background: none; cursor: pointer; border-radius: 4px; }
-    .menu-item:hover { background-color: #eef3ff; color: var(--blue); }
-    .menu-content hr { border: none; border-top: 1px solid #eee; margin: 4px 0; }
-    .menu-content label { display: block; padding: 8px 12px; }
-
-    button { padding:8px 12px; border-radius:8px; border:1px solid #d0d0d0; background:#fff; cursor:pointer; font-size: 14px; }
-    button.primary{ background:#fff; color:var(--blue); border-color:#fff; font-weight: 600; }
-
-    .dropdown-btn, .file-btn-label {
-      padding: 8px 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.5); background: transparent; color: #fff; cursor: pointer;
-      display: inline-flex; align-items: center; gap: 8px;
-    }
-    .dropdown-btn::after {
-      content: '▼'; font-size: 8px; opacity: 0.6;
-    }
-    .dropdown-btn:hover, .file-btn-label:hover { background-color: #f8f8f8; color: #222; }
-
-    .diff { background:#fff6e6; border:1px solid #ffe0a8; border-radius:4px; padding:1px 4px; }
-    .arrow { opacity:0.75; }
-
-    .panel { border:1px solid #e1e1e1; border-radius:8px; background:#fff; padding:10px; min-height:0; display:flex; flex-direction:column; }
-    .panel h3 { margin:0 0 8px 0; font-size:14px; color:#333; }
-
-    #summaryPanel, #sectionsPanel { overflow:auto; }
-    #summary, #sections { overflow:auto; min-height:0; }
-    #sections .sec { padding:6px 8px; border-radius:6px; cursor:pointer; display:flex; justify-content:space-between; align-items:center; }
-    .sec:hover { background:#f6f6f9; }
-    .sec.active { background:#eef3ff; border:1px solid #d9e3ff; }
-    .counts { color:#666; font-size:12px; }
-
-    #left { display:flex; flex-direction:column; min-height:0; }
-    #right { display:flex; flex-direction:column; min-height:0; }
-
-    #filters { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
-    #search { flex:1; min-width:140px; padding:6px 8px; border:1px solid #ddd; border-radius:6px; }
-    #detailsWrap { display:grid; grid-template-columns: 1fr 5px 45%; gap:0; min-height:0; }
-    #tableWrap { flex:1; min-width:0; min-height:0; }
-
-    #table { width:100%; border-collapse: collapse; font-size:13px; }
-    #table th, #table td { border:1px solid #eee; padding:6px 8px; text-align:left; vertical-align:top; }
-    #table th { background:#fafafa; position: sticky; top: 0; z-index:1; }
-    #tableContainer { overflow:auto; height:100%; border:1px solid #e1e1e1; border-radius:8px; }
-    .removedCell { color:#a52222; }
-    .addedCell { color:#1e7b3a; }
-
-    .chip{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;vertical-align:middle;}
-    .legend{position:absolute; bottom:12px; left:12px; background:#fff; padding:10px 12px; border:1px solid #ccc; border-radius:8px; font-size:12px; box-shadow:0 1px 4px rgba(0,0,0,.08);}
-    .pill { padding:2px 6px; border-radius:999px; font-size:12px; font-weight:600; }
-    .pill.added { background:#eaf7ef; color:#1e7b3a; border:1px solid #cdeed6; }
-    .pill.removed { background:#fdeaea; color:#a52222; border:1px solid #f7c7c7; }
-    .pill.changed { background:#fff6e6; color:#935c00; border:1px solid #ffe0a8; }
-    .row { cursor:pointer; }
-
-    .row.highlighted { background-color: #e0eafb !important; }
-    .row:hover { background:#f6f9ff; }
-    #status { color:rgba(255,255,255,0.85); }
-
-    #modalBackdrop{position:fixed;inset:0;background:rgba(0,0,0,.35);display:none;align-items:center;justify-content:center;z-index:9999;}
-    #modal{background:#fff;border-radius:10px;border:1px solid #ddd;max-width:900px;width:90vw;max-height:80vh;display:flex;flex-direction:column;}
-    #modal header{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:1px solid #eee}
-    #modal h2{margin:0;font-size:16px}
-    #modal .body{padding:10px 14px;overflow:auto}
-    #modal .foot{display:flex;gap:8px;justify-content:flex-end;padding:10px 14px;border-top:1px solid #eee}
-    .cell-changed{background:#fff6e6;border:1px solid #ffe0a8;border-radius:6px;padding:2px 4px}
-    .kv{display:grid;grid-template-columns:200px 1fr 1fr;gap:6px;align-items:start}
-    .kv div{padding:6px 8px;border-bottom:1px solid #f2f2f2}
-    .kv .hdr{font-weight:600;background:#fafafa}
-    .tag{display:inline-block;background:#eef3ff;border:1px solid #d9e3ff;color:#2b579a;border-radius:999px;padding:2px 8px;font-size:12px}
-
-    table.modal-hydro { width:100%; border-collapse:separate; border-spacing:0; }
-    table.modal-hydro thead th {
-      background:#fafafa; border-bottom:1px solid #eee; padding:8px 10px; text-align:left;
-      position:sticky; top:0; z-index:1;
-    }
-    table.modal-hydro tbody td { padding:6px 10px; border-top:1px solid #f4f4f4; }
-    table.modal-hydro tbody tr:nth-child(odd) { background:#fcfcfe; }
-    table.modal-hydro .resp { font-weight:600; white-space:nowrap; }
-    table.modal-hydro .num { font-variant-numeric: tabular-nums; text-align:right; display:inline-block; min-width:3ch; }
-    table.modal-hydro .delta {
-      display:inline-flex; align-items:center; gap:6px;
-      background:#fff6e6; border:1px solid #ffe0a8; border-radius:8px; padding:2px 6px;
-      font-variant-numeric: tabular-nums;
-    }
-    table.modal-hydro .old { opacity:.75; text-decoration:line-through; }
-    table.modal-hydro .arrow { opacity:.6; }
-    table.modal-hydro .diff { font-weight:600; }
-    table.modal-hydro .plusminus { opacity:.7; }
-
-    /* Desktop-ish legend look */
-    .legend-title { font-weight:700; margin-bottom:6px; color:#333; }
-    .lg-item { display:flex; align-items:center; gap:8px; margin:4px 0; }
-    .lg-swatch { width:16px; height:6px; border-radius:3px; display:inline-block; border:1px solid rgba(0,0,0,.2); }
-    .lg-unchanged { background: var(--gray); }
-    .lg-changed { background: var(--orange); }
-    .lg-added   { background: var(--green); }
-    .lg-removed { background: var(--red); }
-
-    #map { min-width:0; min-height:0; border:1px solid #e1e1e1; border-radius:8px; }
-    /* Map label badges */
-    .map-label {
-      background: transparent;
-      border: none;
-      font-size: 10px;
-      color: #000;
-      white-space: nowrap;
-      text-shadow: 1px 1px 2px #fff, -1px -1px 2px #fff, 1px -1px 2px #fff, -1px 1px 2px #fff;
-    }
-
-    input[type=file]{ display: none; } /* Hide default file inputs */
-    .file-input-container { display: flex; align-items: center; gap: 8px; }
-    .file-name-display {
-      font-size: 12px; color: rgba(255,255,255,0.75);
-      max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-      cursor: default;
-    }
-
-    .help-button {
-      width: 28px; height: 28px; border-radius: 50%;
-      background: transparent; color: #fff; border: 1px solid rgba(255,255,255,0.7);
-      font-weight: bold; font-size: 16px; line-height: 1;
-      display: flex; align-items: center; justify-content: center;
-      cursor: pointer; padding: 0;
-    }
-    .help-button:hover { background: #fff; color: var(--blue); }
-    #helpModal .body ul { padding-left: 20px; margin-top: 0; }
-    #helpModal .body li { margin-bottom: 10px; }
-  </style>
+  <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
   <header>
@@ -218,21 +48,9 @@
       </div>
     </div>
 
-    <div class="btn-group" style="align-items: center;">
-      <div class="file-input-container">
-        <label for="f1" class="file-btn-label">First .inp</label>
-        <input id="f1" type="file" accept=".inp,.txt" />
-        <span id="f1-name" class="file-name-display"></span>
-      </div>
-      <div class="file-input-container">
-        <label for="f2" class="file-btn-label">Second .inp</label>
-        <input id="f2" type="file" accept=".inp,.txt" />
-        <span id="f2-name" class="file-name-display"></span>
-      </div>
-    </div>
-
-    <button id="go" class="primary">Compare</button>
+    <button id="go" class="primary">Run Comparison</button>
     <span id="status"></span>
+
     <div id="app-title-group">
       <h1>SWMM Comparison App</h1>
       <img src="SWMM%20Comparison%20App%20Icon.ico" alt="App Icon">
@@ -240,82 +58,7 @@
     </div>
   </header>
 
-  <script>
-    function updateFileName(inputId, spanId) {
-      const input = document.getElementById(inputId);
-      const span = document.getElementById(spanId);
-      input.addEventListener('change', () => span.textContent = input.files[0]?.name || '');
-    }
-    function openHelpModal() { document.getElementById('helpModalBackdrop').style.display = 'flex'; }
-    function closeHelpModal() { document.getElementById('helpModalBackdrop').style.display = 'none'; }
-    document.addEventListener('DOMContentLoaded', () => {
-      document.getElementById('helpBtn').addEventListener('click', openHelpModal);
-    });
-
-    function makeResizable() {
-      const vSplitter = document.getElementById('v-splitter');
-      const mapSplitter = document.getElementById('map-v-splitter');
-      const wrap = document.getElementById('wrap');
-      const left = document.getElementById('left');
-
-      vSplitter.addEventListener('mousedown', (e) => {
-        e.preventDefault();
-        document.body.classList.add('resizing-v');
-        const startX = e.clientX;
-        const startWidth = left.getBoundingClientRect().width;
-
-        const onMouseMove = (moveEvent) => {
-          const newWidth = startWidth + (moveEvent.clientX - startX);
-          if (newWidth > 200 && newWidth < (wrap.clientWidth - 400)) {
-            wrap.style.gridTemplateColumns = `${newWidth}px 5px 1fr`;
-          }
-        };
-        const onMouseUp = () => {
-          document.body.classList.remove('resizing-v');
-          document.removeEventListener('mousemove', onMouseMove);
-          document.removeEventListener('mouseup', onMouseUp);
-        };
-        document.addEventListener('mousemove', onMouseMove);
-        document.addEventListener('mouseup', onMouseUp);
-      });
-
-      mapSplitter.addEventListener('mousedown', (e) => {
-        e.preventDefault();
-        document.body.classList.add('resizing-v');
-        const detailsWrap = document.getElementById('detailsWrap');
-        const startX = e.clientX;
-        const startWidth = detailsWrap.querySelector('#tableWrap').getBoundingClientRect().width;
-
-        const onMouseMove = (moveEvent) => {
-          const newWidth = startWidth + (moveEvent.clientX - startX);
-          if (newWidth > 200 && newWidth < (detailsWrap.clientWidth - 200)) {
-            detailsWrap.style.gridTemplateColumns = `${newWidth}px 5px 1fr`;
-          }
-        };
-        const onMouseUp = () => { document.body.classList.remove('resizing-v'); document.removeEventListener('mousemove', onMouseMove); };
-        document.addEventListener('mousemove', onMouseMove);
-        document.addEventListener('mouseup', onMouseUp, { once: true });
-      });
-
-    }
-    document.addEventListener('DOMContentLoaded', makeResizable);
-
-  </script>
-  <script>
-    // Simple throttle function to limit how often a function can be called.
-    function throttle(func, limit) {
-      let inThrottle;
-      return function() {
-        const args = arguments;
-        const context = this;
-        if (!inThrottle) {
-          func.apply(context, args);
-          inThrottle = true;
-          setTimeout(() => inThrottle = false, limit);
-        }
-      };
-    }
-  </script>
+  <!-- JavaScript modules loaded at end of body -->
 
   <div id="wrap">
     <!-- Left Panel: Sections -->
@@ -335,6 +78,7 @@
           <label><input type="checkbox" id="fAdded" checked> Added</label>
           <label><input type="checkbox" id="fRemoved" checked> Removed</label>
           <label><input type="checkbox" id="fChanged" checked> Changed</label>
+          <label style="margin-left: 10px; border-left: 1px solid #ddd; padding-left: 10px;"><input type="checkbox" id="fShowDiffs"> Show Diffs</label>
           <input id="search" placeholder="Filter rows…" />
           <span id="currentSectionLabel" style="color:#333;font-weight:600;"></span>
         </div>
@@ -379,6 +123,42 @@
     </div>
   </div>
 
+  <div id="compareModalBackdrop" style="position:fixed;inset:0;background:rgba(0,0,0,.35);display:none;align-items:center;justify-content:center;z-index:10000;" onclick="if(event.target===this) closeCompareModal()">
+    <div id="compareModal" style="background:#fff;border-radius:10px;border:1px solid #ddd;max-width:550px;width:90vw;display:flex;flex-direction:column;">
+      <header style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:1px solid #eee">
+        <h2 style="margin:0;font-size:16px">Run Comparison with Tolerances</h2>
+        <button onclick="closeCompareModal()">Cancel</button>
+      </header>
+      <div class="body" style="padding:10px 14px;overflow:auto; display: grid; grid-template-columns: 1fr; gap: 12px;">
+        <h3 style="grid-column: 1 / -1; margin: 0; font-size: 14px; border-bottom: 1px solid #eee; padding-bottom: 8px;">Model Files</h3>
+        <div class="file-input-container">
+          <label for="f1" class="file-btn-label" style="color: #222; border-color: #ccc;">First .inp</label>
+          <input id="f1" type="file" accept=".inp,.txt" />
+          <span id="f1-name" class="file-name-display" style="color: #555;">No file selected</span>
+        </div>
+        <div class="file-input-container">
+          <label for="f2" class="file-btn-label" style="color: #222; border-color: #ccc;">Second .inp</label>
+          <input id="f2" type="file" accept=".inp,.txt" />
+          <span id="f2-name" class="file-name-display" style="color: #555;">No file selected</span>
+        </div>
+      </div>
+
+      <div class="body" style="padding:10px 14px;overflow:auto; display: grid; grid-template-columns: 1fr 1fr; gap: 12px 20px;">
+        <h3 style="grid-column: 1 / -1; margin: 0; font-size: 14px; border-bottom: 1px solid #eee; padding-bottom: 8px;">Numerical Tolerances</h3>
+        <p style="grid-column: 1 / -1; margin: 0 0 8px 0; font-size: 12px; color: #555;">
+          Changes to the fields below will be ignored if the absolute difference is less than or equal to the specified tolerance.
+        </p>
+        <label>Conduit: Length<input type="number" id="tol_conduit_length" value="0" step="0.1" class="tol-input"></label>
+        <label>Junction: Invert Elev<input type="number" id="tol_junction_invert" value="0" step="0.01" class="tol-input"></label>
+        <label>Conduit: In/Out Offset<input type="number" id="tol_conduit_offset" value="0" step="0.01" class="tol-input"></label>
+        <label>Junction: Max Depth<input type="number" id="tol_junction_depth" value="0" step="0.01" class="tol-input"></label>
+      </div>
+      <div class="foot" style="display:flex;gap:8px;justify-content:flex-end;padding:10px 14px;border-top:1px solid #eee">
+        <button id="runCompareFromModal" class="primary" style="min-width: 120px;">Run Comparison</button>
+      </div>
+    </div>
+  </div>
+
   <div id="helpModalBackdrop" style="position:fixed;inset:0;background:rgba(0,0,0,.35);display:none;align-items:center;justify-content:center;z-index:10000;" onclick="if(event.target===this) closeHelpModal()">
     <div id="helpModal" style="background:#fff;border-radius:10px;border:1px solid #ddd;max-width:600px;width:90vw;max-height:80vh;display:flex;flex-direction:column;">
       <header style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:1px solid #eee">
@@ -404,20 +184,10 @@
     </div>
   </div>
 
-  <script>
-    const PROJECTIONS = {
-      "EPSG:3735": "+proj=lcc +lat_0=38 +lon_0=-82.5 +lat_1=40.0333333333333 +lat_2=38.7333333333333 +x_0=600000 +y_0=0 +ellps=GRS80 +units=us-ft +no_defs +type=crs",
-      "EPSG:3733": "+proj=lcc +lat_0=39.6666666666667 +lon_0=-82.5 +lat_1=41.7 +lat_2=40.4333333333333 +x_0=600000 +y_0=0 +ellps=GRS80 +units=us-ft +no_defs +type=crs",
-      "EPSG:6499": "+proj=lcc +lat_0=41.5 +lon_0=-84.3666666666667 +lat_1=43.6666666666667 +lat_2=42.1 +x_0=3999999.999984 +y_0=0 +ellps=GRS80 +units=ft +no_defs +type=crs",
-      "EPSG:2272": "+proj=lcc +lat_0=39.33333333333334 +lon_0=-77.75 +lat_1=40.96666666666667 +lat_2=39.93333333333333 +x_0=600000.00012192 +y_0=0.000121915682 +datum=NAD83 +units=us-ft +no_defs +type=crs"
-    };
+  <script type="module" src="app.js"></script>
 
-    let CURRENT_CRS = "EPSG:3735";
-    proj4.defs(CURRENT_CRS, PROJECTIONS[CURRENT_CRS]);
-    const XY_LATLNG_CACHE = new Map();
-
-    document.getElementById('crsSelect').addEventListener('change', (e) => {
-      CURRENT_CRS = e.target.value;
+</body>
+</html>
       proj4.defs(CURRENT_CRS, PROJECTIONS[CURRENT_CRS]);
       XY_LATLNG_CACHE.clear();
       if (LAST.json) {
@@ -566,8 +336,8 @@
         if (session.result) {
           restoreFromResult(session.result, session.ui);
         } else if (FILES.f1Bytes && FILES.f2Bytes) {
-          setStatus("Recomputing comparison from saved INP files…");
-          worker.postMessage({ type:"compare", file1: FILES.f1Bytes, file2: FILES.f2Bytes }, [FILES.f1Bytes, FILES.f2Bytes]);
+          setStatus("Recomputing comparison from saved INP files (using default tolerances)…");
+          worker.postMessage({ type:"compare", file1: FILES.f1Bytes, file2: FILES.f2Bytes, tolerances: {} }, [FILES.f1Bytes, FILES.f2Bytes]);
         } else {
           alert("Session file has no result data and no embedded INP files. Please select the INP files and run Compare.");
         }
@@ -685,18 +455,6 @@
 
     document.getElementById('exportXlsx').addEventListener('click', exportToExcel);
 
-    updateFileName('f1', 'f1-name');
-    updateFileName('f2', 'f2-name');
-
-    document.getElementById('go').addEventListener('click', async ()=>{
-      const f1 = document.getElementById('f1').files?.[0];
-      const f2 = document.getElementById('f2').files?.[0];
-      if (!f1 || !f2) return;
-      FILES.f1Name = f1.name; FILES.f2Name = f2.name;
-      const [b1, b2] = await Promise.all([f1.arrayBuffer(), f2.arrayBuffer()]);
-      FILES.f1Bytes = b1; FILES.f2Bytes = b2;
-      
-    }); // This is the duplicate 'go' event listener, removing it.
     let LAST = { json:null, currentSection:null }; // Moved LAST declaration here to ensure it's initialized early.
     // Use canvas renderer for better performance with large datasets
     const map = L.map('map', { zoomControl:true, maxZoom: 22, renderer: L.canvas() }).setView([39.1031, -84.5120], 12);
@@ -1055,19 +813,46 @@
 
       const hdrs = headers[sec] || [];
       const hdrsLabeled = relabelHeaders(sec, hdrs);
+      const originalHdrsLength = hdrsLabeled.length;
+
+      if (sec === 'JUNCTIONS') {
+        hdrsLabeled.push('Rim Elevation');
+      }
+
+      const showDiffs = document.getElementById('fShowDiffs').checked;
+
+      const diffHeaders = [];
+      if (showDiffs) {
+        if (sec === 'CONDUITS') {
+          diffHeaders.push('Δ Length', 'Δ InOffset', 'Δ OutOffset');
+        } else if (sec === 'JUNCTIONS') { // Rim Elevation columns removed from here
+          diffHeaders.push('Δ InvertElev', 'Δ MaxDepth');
+        }
+      }
 
       const rows = [];
-      const push = (type, id, oldArr, newArr) => rows.push({type,id,oldArr:(oldArr||[]),newArr:(newArr||[])});
+      const push = (type, id, oldArr, newArr, diffs) => rows.push({type,id,oldArr:(oldArr||[]),newArr:(newArr||[]), diffs:(diffs||{})});
 
       for (const [id, arr] of Object.entries(d.added || {})) if (passChangeFilter('Added')) push('Added', id, [], arr);
       for (const [id, arr] of Object.entries(d.removed || {})) if (passChangeFilter('Removed')) push('Removed', id, arr, []);
-      for (const [id, pair] of Object.entries(d.changed || {})) if (passChangeFilter('Changed')) push('Changed', id, pair[0], pair[1]);
+      for (const [id, changedObj] of Object.entries(d.changed || {})) {
+        if (passChangeFilter('Changed')) {
+          push('Changed', id, changedObj.values[0], changedObj.values[1], changedObj.diff_values);
+        }
+      }
 
-      const filt = q ? rows.filter(r => (r.id+' '+r.type+' '+r.oldArr.join(' ')+' '+r.newArr.join(' ')).toLowerCase().includes(q)) : rows;
+      const filt = q ? rows.filter(r => (r.id+' '+r.type+' '+r.oldArr.join(' ')+' '+r.newArr.join(' ')).toLowerCase().includes(q)) : rows.sort((a,b) => a.id.localeCompare(b.id));
 
       let thead = `<thead><tr><th style="width:180px">ElementID</th><th style="width:110px">Change</th>`;
       for (const h of hdrsLabeled) thead += `<th>${escapeHtml(h)}</th>`;
+      for (const h of diffHeaders) thead += `<th style="background:#eef3ff;">${escapeHtml(h)}</th>`;
       thead += `</tr></thead>`;
+
+      const fmtNum = (n) => {
+        if (typeof n !== 'number' || !isFinite(n)) return '—';
+        const s = n.toFixed(3);
+        return s === '-0.000' ? '0.000' : s;
+      };
 
       const tbodyParts = [];
       for (const r of filt){
@@ -1076,7 +861,7 @@
         tr += `<td>${escapeHtml(r.id)}</td>`;
         tr += `<td><span class="pill ${pill}">${r.type}</span></td>`;
 
-        const len = hdrsLabeled.length;
+        const len = hdrsLabeled.length; // Now use the full labeled headers length
         let oldA, newA;
 
         if (sec === "HYDROGRAPHS") {
@@ -1095,19 +880,48 @@
         while (newA.length < len) newA.push("");
 
         for (let i=0;i<len;i++){
-          const ov = oldA[i] ?? "";
-          const nv = newA[i] ?? "";
-          if (r.type === "Added")      tr += `<td class="addedCell">${escapeHtml(nv)}</td>`;
-          else if (r.type === "Removed") tr += `<td class="removedCell">${escapeHtml(ov)}</td>`;
-          else tr += (ov !== nv)
-            ? `<td><span class="diff">${escapeHtml(ov)} <span class="arrow">→</span> ${escapeHtml(nv)}</span></td>`
-            : `<td>${escapeHtml(nv)}</td>`;
+          // Handle special calculated Rim Elevation column
+          if (sec === 'JUNCTIONS' && i === originalHdrsLength) {
+            const oldRim = r.diffs?.RimElevation_old;
+            const newRim = r.diffs?.RimElevation_new;
+
+            if (r.type === "Added") {
+              tr += `<td class="addedCell">${fmtNum(newRim)}</td>`;
+            } else if (r.type === "Removed") {
+              tr += `<td class="removedCell">${fmtNum(oldRim)}</td>`;
+            } else { // Changed or Unchanged
+              tr += (fmtNum(oldRim) !== fmtNum(newRim))
+                ? `<td><span class="diff">${fmtNum(oldRim)} <span class="arrow">→</span> ${fmtNum(newRim)}</span></td>`
+                : `<td>${fmtNum(newRim)}</td>`;
+            }
+          } else { // Handle normal columns
+            const ov = oldA[i] ?? "";
+            const nv = newA[i] ?? "";
+            if (r.type === "Added")      tr += `<td class="addedCell">${escapeHtml(nv)}</td>`;
+            else if (r.type === "Removed") tr += `<td class="removedCell">${escapeHtml(ov)}</td>`;
+            else tr += (ov !== nv)
+              ? `<td><span class="diff">${escapeHtml(ov)} <span class="arrow">→</span> ${escapeHtml(nv)}</span></td>`
+              : `<td>${escapeHtml(nv)}</td>`;
+          }
         }
+
+        if (showDiffs) {
+          if (sec === 'CONDUITS') {
+            tr += `<td class="cell-changed">${fmtNum(r.diffs?.Length)}</td>`;
+            tr += `<td class="cell-changed">${fmtNum(r.diffs?.InOffset)}</td>`;
+            tr += `<td class="cell-changed">${fmtNum(r.diffs?.OutOffset)}</td>`;
+          } else if (sec === 'JUNCTIONS') {
+            tr += `<td class="cell-changed">${fmtNum(r.diffs?.InvertElev)}</td>`;
+            tr += `<td class="cell-changed">${fmtNum(r.diffs?.MaxDepth)}</td>`;
+          }
+        }
+
         tr += `</tr>`;
         tbodyParts.push(tr);
       }
 
-      table.innerHTML = thead + `<tbody>${tbodyParts.join("") || `<tr><td colspan="${hdrsLabeled.length+2}" style="color:#666;font-style:italic;">No rows match.</td></tr>`}</tbody>`;
+      const totalCols = hdrsLabeled.length + diffHeaders.length + 2;
+      table.innerHTML = thead + `<tbody>${tbodyParts.join("") || `<tr><td colspan="${totalCols}" style="color:#666;font-style:italic;">No rows match.</td></tr>`}</tbody>`;
 
       table.querySelectorAll('tbody tr').forEach((tr)=>{
         const id = tr.children[0]?.textContent || "";
@@ -1291,17 +1105,41 @@
     };
     worker.postMessage({ type:"init" });
 
-    document.getElementById('go').addEventListener('click', async ()=>{
+    function openCompareModal() {
+      document.getElementById('compareModalBackdrop').style.display = 'flex';
+    }
+    function closeCompareModal() { document.getElementById('compareModalBackdrop').style.display = 'none'; }
+
+    document.getElementById('go').addEventListener('click', openCompareModal);
+
+    document.getElementById('runCompareFromModal').addEventListener('click', async ()=>{
       const f1 = document.getElementById('f1').files?.[0];
       const f2 = document.getElementById('f2').files?.[0];
-      if (!f1 || !f2) { alert("Please choose both INP files."); return; }
+      if (!f1 || !f2) { alert("Please select both INP files to compare."); return; }
+
+      const tolerances = {
+        "CONDUIT_LENGTH": parseFloat(document.getElementById('tol_conduit_length').value) || 0,
+        "CONDUIT_OFFSET": parseFloat(document.getElementById('tol_conduit_offset').value) || 0,
+        "JUNCTION_INVERT": parseFloat(document.getElementById('tol_junction_invert').value) || 0,
+        "JUNCTION_DEPTH": parseFloat(document.getElementById('tol_junction_depth').value) || 0,
+      };
+
       setStatus("Reading files…");
       const [b1, b2] = await Promise.all([f1.arrayBuffer(), f2.arrayBuffer()]);
       setStatus("Running comparison…");
-      worker.postMessage({ type:"compare", file1: b1, file2: b2 }, [b1, b2]);
+      worker.postMessage({ type:"compare", file1: b1, file2: b2, tolerances: tolerances }, [b1, b2]);
+      closeCompareModal();
     });
 
-    ["fAdded","fRemoved","fChanged","search"].forEach(id=>{
+    function updateFileName(inputId, spanId) {
+      const input = document.getElementById(inputId);
+      const span = document.getElementById(spanId);
+      input.addEventListener('change', () => span.textContent = input.files[0]?.name || 'No file selected');
+    }
+    updateFileName('f1', 'f1-name');
+    updateFileName('f2', 'f2-name');
+
+    ["fAdded","fRemoved","fChanged","fShowDiffs","search"].forEach(id=>{
       document.getElementById(id).addEventListener(id==="search"?"input":"change", ()=>{
         if (!LAST.currentSection) return;
         renderTableFor(LAST.currentSection);
