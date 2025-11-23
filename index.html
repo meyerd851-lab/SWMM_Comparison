@@ -5,7 +5,7 @@
   <meta charset="utf-8" />
   <title>SWMM Comparison App</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <link rel="icon" type="image/png" href="SWMM%20Comparison%20App%20Icon.ico">
+  <link rel="icon" type="image/x-icon" href="SWMM%20Comparison%20App%20Icon.ico">
 
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -26,6 +26,7 @@
         <input id="loadSessInput" type="file" accept=".json" />
       </div>
     </div>
+
     <div class="menu">
       <div class="menu-btn">Map</div>
       <div class="menu-content">
@@ -60,10 +61,7 @@
     </div>
   </header>
 
-  <!-- JavaScript modules loaded at end of body -->
-
   <div id="wrap">
-    <!-- Left Panel: Sections -->
     <div id="left">
       <div id="sectionsPanel" class="panel">
         <h3>Sections</h3>
@@ -73,15 +71,15 @@
 
     <div id="v-splitter" class="splitter v-splitter"></div>
 
-    <!-- Right Panel: Filters, Table, Map -->
     <div id="right">
       <div class="panel" style="gap:8px;">
         <div id="filters">
           <label><input type="checkbox" id="fAdded" checked> Added</label>
           <label><input type="checkbox" id="fRemoved" checked> Removed</label>
           <label><input type="checkbox" id="fChanged" checked> Changed</label>
-          <label style="margin-left: 10px; border-left: 1px solid #ddd; padding-left: 10px;"><input type="checkbox"
-              id="fShowDiffs"> Show Diffs</label>
+          <label style="margin-left: 10px; border-left: 1px solid #ddd; padding-left: 10px;">
+            <input type="checkbox" id="fShowDiffs"> Show Diffs
+          </label>
           <input id="search" placeholder="Filter rows…" />
           <span id="currentSectionLabel" style="color:#333;font-weight:600;"></span>
         </div>
@@ -112,6 +110,8 @@
       <div class="lg-item"><span class="lg-swatch lg-removed"></span><span>Removed</span></div>
     </div>
   </template>
+
+  <!-- Details Modal -->
   <div id="modalBackdrop" onclick="if(event.target===this) closeModal()">
     <div id="modal" role="dialog" aria-modal="true">
       <header>
@@ -123,22 +123,27 @@
         <div class="kv" id="modalGrid"></div>
       </div>
       <div class="foot">
-        <label style="margin-right:auto"><input type="checkbox" id="onlyChangedBox" /> Show changed fields only</label>
+        <label style="margin-right:auto">
+          <input type="checkbox" id="onlyChangedBox" /> Show changed fields only
+        </label>
         <button onclick="copyRowJSON()">Copy JSON</button>
       </div>
     </div>
   </div>
 
+  <!-- Run Comparison Modal -->
   <div id="compareModalBackdrop"
     style="position:fixed;inset:0;background:rgba(0,0,0,.35);display:none;align-items:center;justify-content:center;z-index:10000;"
     onclick="if(event.target===this) closeCompareModal()">
     <div id="compareModal"
       style="background:#fff;border-radius:10px;border:1px solid #ddd;max-width:550px;width:90vw;display:flex;flex-direction:column;">
+
       <header
         style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:1px solid #eee">
         <h2 style="margin:0;font-size:16px">Run Comparison with Tolerances</h2>
         <button onclick="closeCompareModal()">Cancel</button>
       </header>
+
       <div class="body" style="padding:10px 14px;overflow:auto; display: grid; grid-template-columns: 1fr; gap: 12px;">
         <h3
           style="grid-column: 1 / -1; margin: 0; font-size: 14px; border-bottom: 1px solid #eee; padding-bottom: 8px;">
@@ -164,17 +169,23 @@
           Changes to the fields below will be ignored if the absolute difference is less than or equal to the specified
           tolerance.
         </p>
-        <label>Conduit: Length<input type="number" id="tol_conduit_length" value="0" step="0.1"
-            class="tol-input"></label>
-        <label>Junction: Invert Elev<input type="number" id="tol_junction_invert" value="0" step="0.01"
-            class="tol-input"></label>
-        <label>Conduit: In/Out Offset<input type="number" id="tol_conduit_offset" value="0" step="0.01"
-            class="tol-input"></label>
-        <label>Junction: Max Depth<input type="number" id="tol_junction_depth" value="0" step="0.01"
-            class="tol-input"></label>
-        <label>Conduit: Roughness<input type="number" id="tol_conduit_roughness" value="0" step="0.001"
-            class="tol-input"></label>
+        <label>Conduit: Length
+          <input type="number" id="tol_conduit_length" value="0" step="0.1" class="tol-input">
+        </label>
+        <label>Junction: Invert Elev
+          <input type="number" id="tol_junction_invert" value="0" step="0.01" class="tol-input">
+        </label>
+        <label>Conduit: In/Out Offset
+          <input type="number" id="tol_conduit_offset" value="0" step="0.01" class="tol-input">
+        </label>
+        <label>Junction: Max Depth
+          <input type="number" id="tol_junction_depth" value="0" step="0.01" class="tol-input">
+        </label>
+        <label>Conduit: Roughness
+          <input type="number" id="tol_conduit_roughness" value="0" step="0.001" class="tol-input">
+        </label>
       </div>
+
       <div class="foot"
         style="display:flex;gap:8px;justify-content:flex-end;padding:10px 14px;border-top:1px solid #eee">
         <button id="runCompareFromModal" class="primary" style="min-width: 120px;">Run Comparison</button>
@@ -182,40 +193,72 @@
     </div>
   </div>
 
+  <!-- Help Modal -->
   <div id="helpModalBackdrop"
     style="position:fixed;inset:0;background:rgba(0,0,0,.35);display:none;align-items:center;justify-content:center;z-index:10000;"
     onclick="if(event.target===this) closeHelpModal()">
     <div id="helpModal"
       style="background:#fff;border-radius:10px;border:1px solid #ddd;max-width:600px;width:90vw;max-height:80vh;display:flex;flex-direction:column;">
+
       <header
         style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:1px solid #eee">
         <h2 style="margin:0;font-size:16px">How to Use This App</h2>
         <button onclick="closeHelpModal()">Close</button>
       </header>
+
       <div class="body" style="padding:10px 14px;overflow:auto">
-        <p>This application helps you compare two SWMM .inp files to identify differences in their structure and
-          parameters. This application is still in testing and may miss edge cases not yet covered by the comparison.
+        <p>
+          This application compares two SWMM <code>.inp</code> files to identify differences in their
+          structure and parameters. It is still in testing and may miss edge cases, so results should
+          be reviewed before use in design or modeling.
         </p>
+
         <ul>
-          <li><strong>Load SWMM .inp Files:</strong> Use the "First .inp" and "Second .inp" buttons to select your two
-            model files, then click "Compare".</li>
-          <li><strong>File Menu:</strong> Use the "File" dropdown to save the current comparison, load a previous one,
-            or export the differences to an Excel file.</li>
-          <li><strong>Map Adjustments:</strong> Use the "Map" dropdown to change visualization and add node labels.
+          <li><strong>File:</strong> Use the <strong>File</strong> menu to save the current comparison,
+            load a previous comparison, or export the differences to an Excel file.</li>
+
+          <li><strong>Map:</strong> Use the <strong>Map</strong> menu to switch between the street and
+            aerial basemaps, change the coordinate system (CRS), or toggle node/subcatchment labels on or off.</li>
+
+          <li><strong>Run Comparison:</strong> Select your “First” and “Second” <code>.inp</code> files,
+            then specify numerical tolerances to control which parameter differences are counted as
+            changes.</li>
+
+          <li><strong>Sections:</strong> The <strong>Sections</strong> panel shows a high-level count of
+            added, removed, and changed elements for each SWMM section. Click a section to load a detailed
+            table of changes in the <strong>Details</strong> panel.</li>
+
+          <li><strong>Details:</strong> The <strong>Details</strong> panel shows a table of changes for
+            the currently selected section.
+            <ul>
+              <li>Click a row to pan and zoom the map to that element and highlight it in cyan.</li>
+              <li>Use the <strong>Added</strong>, <strong>Removed</strong>, and <strong>Changed</strong>
+                toggles to filter which elements are shown.</li>
+              <li>Use <strong>Show Diffs</strong> (where available) to show old vs. new values side-by-side
+                for selected sections.</li>
+              <li>Use the filter box to search for specific element IDs or parameter values within the table.</li>
+              <li>Double-click a row to open a pop-up with additional detail for that change. This is
+                especially used to display RTK changes in the <strong>HYDROGRAPHS</strong> section, which
+                are not fully shown in the table.</li>
+            </ul>
           </li>
-          <li><strong>View Summary:</strong> The "Summary" panel shows a high-level count of added, removed, and
-            changed
-            elements for each section.</li>
-          <li><strong>Explore Sections:</strong> Click a section in the "Sections" panel to view detailed changes in
-            the
-            table on the right.</li>
-          <li><strong>Interact with the Table:</strong>
-            <ul style="margin-top: 10px;">
-              <li><strong>Single-click</strong> a row in the details table to automatically pan and zoom the map to
-                that
-                element, highlighting it in cyan.</li>
-              <li><strong>Double-click</strong> a row to open a detailed pop-up window showing the old and new values
-                for that specific element side-by-side.</li>
+
+          <li><strong>Using the Map:</strong>
+            <ul>
+              <li><strong>Pan and zoom:</strong> Drag to pan and use the mouse wheel or zoom controls to zoom in and
+                out.
+                The map automatically zooms to show all loaded geometry when a comparison is drawn.</li>
+              <li><strong>Click to inspect features:</strong> Click near a node, link, or subcatchment to open a pop-up.
+                The tool prioritizes nodes, then links, then subcatchments when multiple features overlap.</li>
+              <li><strong>Cycle through overlapping features:</strong> If several elements are under the same click,
+                use the left/right arrow buttons in the pop-up to cycle through them.</li>
+              <li><strong>Highlighting:</strong> When an element is selected (from the table or the map),
+                it is outlined in cyan on the map and the corresponding row is highlighted in the Details table.</li>
+              <li><strong>Labels:</strong> When labels are enabled, node and subcatchment IDs appear on the map at
+                higher zoom levels. Turn these on or off using the <strong>Map &gt; Labels</strong> option.</li>
+              <li><strong>Legend and colors:</strong> The legend in the lower-left corner shows the color
+                scheme: unchanged (gray), changed (orange), added (green), removed (red), and the cyan
+                selection highlight.</li>
             </ul>
           </li>
         </ul>
@@ -224,19 +267,6 @@
   </div>
 
   <script type="module" src="app.js"></script>
-
-</body>
-
-</html>
-</ul>
-</li>
-</ul>
-</div>
-</div>
-</div>
-
-<script type="module" src="app.js"></script>
-
 </body>
 
 </html>
