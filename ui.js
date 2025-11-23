@@ -1,8 +1,22 @@
-// ui.js - UI interactions (modals, resizing, file handling, session management, Excel export)
+// ==============================================================================
+// UI.JS - USER INTERFACE INTERACTIONS
+// ==============================================================================
+// This file handles all the direct user interactions and DOM manipulations.
+// It includes logic for:
+// 1. Resizable Panels (drag-and-drop resizing)
+// 2. Modals (Help, Detail, Compare)
+// 3. Session Management (Save/Load JSON)
+// 4. Excel Export
+// ==============================================================================
+
 import { state } from './state.js';
 import { abToB64, b64ToAb, escapeHtml, relabelHeaders } from './utils.js';
 import { renderSections } from './table.js';
 import { drawGeometry } from './map.js';
+
+// ==============================================================================
+// SECTION 1: GLOBAL HELPERS & STATE SETTERS
+// ==============================================================================
 
 // Status setter (will be set by app.js)
 let setStatusCallback = null;
@@ -19,6 +33,13 @@ let workerRef = null;
 export function setWorker(worker) {
   workerRef = worker;
 }
+
+// ==============================================================================
+// SECTION 2: RESIZABLE PANELS
+// ==============================================================================
+// Logic to allow the user to drag the splitters between the sidebar, map, and
+// detail views.
+// ------------------------------------------------------------------------------
 
 // Resizable panels
 export function makeResizable() {
@@ -70,6 +91,12 @@ export function makeResizable() {
   });
 }
 
+// ==============================================================================
+// SECTION 3: MODAL MANAGEMENT
+// ==============================================================================
+// Functions to open and close the various modal dialogs (Help, Compare, Details).
+// ------------------------------------------------------------------------------
+
 // Help modal
 export function openHelpModal() {
   document.getElementById('helpModalBackdrop').style.display = 'flex';
@@ -77,6 +104,13 @@ export function openHelpModal() {
 export function closeHelpModal() {
   document.getElementById('helpModalBackdrop').style.display = 'none';
 }
+
+// ==============================================================================
+// SECTION 4: SESSION MANAGEMENT
+// ==============================================================================
+// Logic to save the current state (files, results, UI settings) to a JSON file
+// and restore it later.
+// ------------------------------------------------------------------------------
 
 // Session management
 export async function saveSession() {
@@ -98,16 +132,27 @@ export async function saveSession() {
         Removed: document.getElementById('fRemoved').checked,
         Changed: document.getElementById('fChanged').checked,
         Search: document.getElementById('search').value || ""
+      },
+      tolerances: {
+        CONDUIT_LENGTH: parseFloat(document.getElementById('tol_conduit_length').value) || 0,
+        CONDUIT_OFFSET: parseFloat(document.getElementById('tol_conduit_offset').value) || 0,
+        JUNCTION_INVERT: parseFloat(document.getElementById('tol_junction_invert').value) || 0,
+        JUNCTION_DEPTH: parseFloat(document.getElementById('tol_junction_depth').value) || 0,
+        CONDUIT_ROUGHNESS: parseFloat(document.getElementById('tol_conduit_roughness').value) || 0
       }
     }
   };
 
   const blob = new Blob([JSON.stringify(session, null, 2)], { type: "application/json" });
 
+  const f1Name = state.FILES.f1Name || "file1";
+  const f2Name = state.FILES.f2Name || "file2";
+  const defaultName = `Comparison_Session_${f1Name}_vs_${f2Name}.json`;
+
   if (window.showSaveFilePicker) {
     try {
       const handle = await window.showSaveFilePicker({
-        suggestedName: `inp_diff_session_${Date.now()}.json`,
+        suggestedName: defaultName,
         types: [{
           description: 'INP Diff Session',
           accept: { 'application/json': ['.json'] }
@@ -124,7 +169,7 @@ export async function saveSession() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `inp_diff_session_${Date.now()}.json`;
+    a.download = defaultName;
     a.click();
     URL.revokeObjectURL(url);
   }
@@ -141,6 +186,14 @@ export function applyUIState(ui) {
   if (ui.crs && state.PROJECTIONS[ui.crs]) {
     document.getElementById('crsSelect').value = ui.crs;
     document.getElementById('crsSelect').dispatchEvent(new Event('change'));
+  }
+
+  if (ui.tolerances) {
+    document.getElementById('tol_conduit_length').value = ui.tolerances.CONDUIT_LENGTH || 0;
+    document.getElementById('tol_conduit_offset').value = ui.tolerances.CONDUIT_OFFSET || 0;
+    document.getElementById('tol_junction_invert').value = ui.tolerances.JUNCTION_INVERT || 0;
+    document.getElementById('tol_junction_depth').value = ui.tolerances.JUNCTION_DEPTH || 0;
+    document.getElementById('tol_conduit_roughness').value = ui.tolerances.CONDUIT_ROUGHNESS || 0;
   }
 }
 
@@ -182,9 +235,10 @@ export async function loadSession(file) {
     if (session.result) {
       await restoreFromResult(session.result, session.ui);
     } else if (state.FILES.f1Bytes && state.FILES.f2Bytes) {
-      setStatus("Recomputing comparison from saved INP files (using default tolerances)…");
+      setStatus("Recomputing comparison from saved INP files…");
+      const tolerances = session.ui?.tolerances || {};
       if (workerRef) {
-        workerRef.postMessage({ type: "compare", file1: state.FILES.f1Bytes, file2: state.FILES.f2Bytes, tolerances: {} }, [state.FILES.f1Bytes, state.FILES.f2Bytes]);
+        workerRef.postMessage({ type: "compare", file1: state.FILES.f1Bytes, file2: state.FILES.f2Bytes, tolerances: tolerances });
       }
     } else {
       alert("Session file has no result data and no embedded INP files. Please select the INP files and run Compare.");
@@ -195,6 +249,13 @@ export async function loadSession(file) {
   }
 }
 
+// ==============================================================================
+// SECTION 5: EXCEL EXPORT
+// ==============================================================================
+// Generates an Excel (.xlsx) file containing the comparison results.
+// It uses the SheetJS (xlsx) library.
+// ------------------------------------------------------------------------------
+
 // Excel export
 export async function exportToExcel() {
   if (!state.LAST.json) { alert("Please run a comparison first."); return; }
@@ -202,8 +263,40 @@ export async function exportToExcel() {
   await new Promise(resolve => setTimeout(resolve, 50));
 
   const wb = XLSX.utils.book_new();
-  const { diffs, headers } = state.LAST.json;
+  const { diffs, headers, tolerances } = state.LAST.json;
 
+  // --- 1. Summary Sheet ---
+  const summaryData = [
+    ["SWMM Comparison Report"],
+    ["Generated", new Date().toLocaleString()],
+    ["File 1", document.getElementById('f1-name').textContent || "file1.inp"],
+    ["File 2", document.getElementById('f2-name').textContent || "file2.inp"],
+    [],
+    ["Tolerances Used"],
+  ];
+
+  if (tolerances && Object.keys(tolerances).length > 0) {
+    for (const [k, v] of Object.entries(tolerances)) {
+      summaryData.push([k, v]);
+    }
+  } else {
+    summaryData.push(["(None)"]);
+  }
+
+  summaryData.push([]);
+  summaryData.push(["Section Summary"]);
+  summaryData.push(["Section", "Added", "Removed", "Changed"]);
+
+  for (const sec of Object.keys(diffs).sort()) {
+    const d = diffs[sec];
+    summaryData.push([sec, Object.keys(d.added || {}).length, Object.keys(d.removed || {}).length, Object.keys(d.changed || {}).length]);
+  }
+
+  const wsSummary = XLSX.utils.aoa_to_sheet(summaryData);
+  wsSummary['!cols'] = [{ wch: 25 }, { wch: 40 }, { wch: 15 }, { wch: 15 }];
+  XLSX.utils.book_append_sheet(wb, wsSummary, "Summary");
+
+  // --- 2. Section Sheets ---
   const styles = {
     header: { font: { bold: true }, fill: { fgColor: { rgb: "FFFAFAFA" } } },
     added: { fill: { fgColor: { rgb: "FFEAF7EF" } }, font: { color: { rgb: "FF1E7B3A" } } },
@@ -252,7 +345,7 @@ export async function exportToExcel() {
 
           if (r.type === 'Added') row.push(nv);
           else if (r.type === 'Removed') row.push(ov);
-          else row.push(ov === nv ? nv : `${ov} → ${nv}`);
+          else row.push(ov === nv ? nv : `${ov} -> ${nv}`);
         }
         sheetData.push(row);
       });
@@ -260,7 +353,13 @@ export async function exportToExcel() {
 
     const ws = XLSX.utils.aoa_to_sheet(sheetData);
 
-    const colWidths = sheetData[0].map(h => h.length);
+    // Auto-filter
+    if (sheetData.length > 0) {
+      const range = XLSX.utils.decode_range(ws['!ref']);
+      ws['!autofilter'] = { ref: XLSX.utils.encode_range(range) };
+    }
+
+    const colWidths = sheetData[0].map(h => (h ? h.length : 10));
     for (let R = 0; R < sheetData.length; ++R) {
       for (let C = 0; C < sheetData[R].length; ++C) {
         const cell_address = { c: C, r: R };
@@ -281,7 +380,7 @@ export async function exportToExcel() {
           const changeType = sheetData[R][1];
           if (changeType === 'Added') ws[cell_ref].s = styles.added;
           else if (changeType === 'Removed') ws[cell_ref].s = styles.removed;
-          else if (cellValue.includes('→')) ws[cell_ref].s = styles.changed;
+          else if (cellValue.includes('->')) ws[cell_ref].s = styles.changed;
         }
       }
     }
@@ -298,6 +397,13 @@ export async function exportToExcel() {
   XLSX.writeFile(wb, filename);
   setStatus("Excel file generated.");
 }
+
+// ==============================================================================
+// SECTION 6: DETAIL VIEW
+// ==============================================================================
+// Displays the side-by-side comparison of a specific element (node, link, etc.)
+// in a modal or side panel.
+// ------------------------------------------------------------------------------
 
 // Detail modal
 export function openDetail(section, id) {

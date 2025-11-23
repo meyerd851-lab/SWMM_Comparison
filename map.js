@@ -1,7 +1,6 @@
 // map.js - Map functionality (Leaflet, geometry drawing, labels, popups, highlighting)
 import { state } from './state.js';
-import { escapeHtml, throttle } from './utils.js';
-import { relabelHeaders } from './utils.js';
+import { escapeHtml, throttle, relabelHeaders } from './utils.js';
 
 // Map initialization
 export const map = L.map('map', { zoomControl: true, maxZoom: 22, renderer: L.canvas() }).setView([39.1031, -84.5120], 12);
@@ -45,7 +44,8 @@ export const layers = {
 
 export const C = { unchanged: "#7f8c8d", changed: "#f39c12", added: "#2ecc71", removed: "#e74c3c", select: "#00FFFF" };
 
-// Coordinate conversion
+// --- COORDINATE & GEOMETRY HELPERS ---
+
 export function xyToLatLng(x, y) {
   const [lon, lat] = proj4(state.CURRENT_CRS, "EPSG:4326", [x, y]);
   return [lat, lon];
@@ -55,37 +55,7 @@ export function coordsToLatLng(coords) {
   return coords.map(p => xyToLatLng(p[0], p[1]));
 }
 
-// Section type helper
-export const secType = (sec) => (
-  ["JUNCTIONS", "OUTFALLS", "DIVIDERS", "STORAGE"].includes(sec) ? "nodes" :
-  ["CONDUITS", "PUMPS", "ORIFICES", "WEIRS", "OUTLETS"].includes(sec) ? "links" :
-  sec === "SUBCATCHMENTS" ? "subs" : null
-);
-
-// Build sets for diff visualization
-export function buildSets(diffs, renames) {
-  const sets = {
-    nodes: { added: new Set(), removed: new Set(), changed: new Set(), base: new Set() },
-    links: { added: new Set(), removed: new Set(), changed: new Set(), base: new Set() },
-    subs: { added: new Set(), removed: new Set(), changed: new Set(), base: new Set() }
-  };
-  for (const [sec, d] of Object.entries(diffs)) {
-    const t = secType(sec); if (!t) continue;
-    Object.keys(d.added || {}).forEach(id => sets[t].added.add(id));
-    Object.keys(d.removed || {}).forEach(id => sets[t].removed.add(id));
-    Object.keys(d.changed || {}).forEach(id => sets[t].changed.add(id));
-  }
-  for (const [sec, mapping] of Object.entries(renames || {})) {
-    const t = secType(sec); if (!t) continue;
-    Object.keys(mapping).forEach(oldId => sets[t].changed.add(oldId));
-  }
-  return sets;
-}
-
-// Labels
-const labelsLayer = L.layerGroup().addTo(map);
-const LABEL_ZOOM_THRESHOLD = 17;
-
+// Helper: Calculate midpoint of a line string
 function midOfLine(coords) {
   if (!coords || coords.length === 0) return null;
   if (coords.length === 1) return coords[0];
@@ -110,12 +80,118 @@ function midOfLine(coords) {
   return coords[Math.floor(coords.length / 2)];
 }
 
+// Helper: Calculate centroid of a polygon
 function centroidOfPoly(coords) {
   if (!coords || coords.length === 0) return null;
   let x = 0, y = 0;
   for (const p of coords) { x += p[0]; y += p[1]; }
   return [x / coords.length, y / coords.length];
 }
+
+// Helper: Ray-casting algorithm for Point-in-Polygon selection
+function isPointInPoly(pt, poly) {
+  let x = pt.lat, y = pt.lng;
+  let inside = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    let xi = poly[i].lat, yi = poly[i].lng;
+    let xj = poly[j].lat, yj = poly[j].lng;
+    let intersect = ((yi > y) != (yj > y)) &&
+      (x < (xj - xi) * (y - yi) / (yj - yi) + xi);
+    if (intersect) inside = !inside;
+  }
+  return inside;
+}
+
+// Helper: Get closest point on segment in pixels
+function getClosestPointOnSegment(p, a, b) {
+  let x = p.x, y = p.y;
+  let x1 = a.x, y1 = a.y;
+  let x2 = b.x, y2 = b.y;
+  let C = x2 - x1, D = y2 - y1;
+  let dot = (x - x1) * C + (y - y1) * D;
+  let len_sq = C * C + D * D;
+  let param = -1;
+  if (len_sq !== 0) param = dot / len_sq;
+  let xx, yy;
+  if (param < 0) { xx = x1; yy = y1; param = 0; }
+  else if (param > 1) { xx = x2; yy = y2; param = 1; }
+  else { xx = x1 + param * C; yy = y1 + param * D; }
+  return { x: xx, y: yy, t: param, distSq: (x - xx) ** 2 + (y - yy) ** 2 };
+}
+
+// Helper: Check if a click is on a link (pixel-based + middle 80% rule)
+function isClickOnLink(containerPoint, layer, tolerancePx) {
+  const pts = layer.getLatLngs();
+  const segments = Array.isArray(pts[0]) ? pts : [pts];
+
+  for (const line of segments) {
+    const pxPoints = line.map(ll => map.latLngToContainerPoint(ll));
+
+    // 1. Calculate total length
+    let totalLen = 0;
+    const segLens = [];
+    for (let i = 0; i < pxPoints.length - 1; i++) {
+      const d = pxPoints[i].distanceTo(pxPoints[i + 1]);
+      segLens.push(d);
+      totalLen += d;
+    }
+
+    if (totalLen === 0) continue;
+
+    // 2. Find closest point and its station
+    let minDstSq = Infinity;
+    let bestStation = -1;
+    let currentStation = 0;
+
+    for (let i = 0; i < pxPoints.length - 1; i++) {
+      const res = getClosestPointOnSegment(containerPoint, pxPoints[i], pxPoints[i + 1]);
+      if (res.distSq < minDstSq) {
+        minDstSq = res.distSq;
+        bestStation = currentStation + res.t * segLens[i];
+      }
+      currentStation += segLens[i];
+    }
+
+    // 3. Check tolerance and range (10% buffer on each end)
+    if (Math.sqrt(minDstSq) <= tolerancePx) {
+      const ratio = bestStation / totalLen;
+      if (ratio >= 0.1 && ratio <= 0.9) return true;
+    }
+  }
+  return false;
+}
+
+// --- LOGIC HELPERS ---
+
+export const secType = (sec) => (
+  ["JUNCTIONS", "OUTFALLS", "DIVIDERS", "STORAGE"].includes(sec) ? "nodes" :
+    ["CONDUITS", "PUMPS", "ORIFICES", "WEIRS", "OUTLETS"].includes(sec) ? "links" :
+      sec === "SUBCATCHMENTS" ? "subs" : null
+);
+
+export function buildSets(diffs, renames) {
+  const sets = {
+    nodes: { added: new Set(), removed: new Set(), changed: new Set(), base: new Set() },
+    links: { added: new Set(), removed: new Set(), changed: new Set(), base: new Set() },
+    subs: { added: new Set(), removed: new Set(), changed: new Set(), base: new Set() }
+  };
+  for (const [sec, d] of Object.entries(diffs)) {
+    const t = secType(sec); if (!t) continue;
+    Object.keys(d.added || {}).forEach(id => sets[t].added.add(id));
+    Object.keys(d.removed || {}).forEach(id => sets[t].removed.add(id));
+    Object.keys(d.changed || {}).forEach(id => sets[t].changed.add(id));
+  }
+  for (const [sec, mapping] of Object.entries(renames || {})) {
+    const t = secType(sec); if (!t) continue;
+    Object.keys(mapping).forEach(oldId => sets[t].changed.add(oldId));
+  }
+  return sets;
+}
+
+// --- DRAWING & LABELS ---
+
+const labelsLayer = L.layerGroup().addTo(map);
+const LABEL_ZOOM_THRESHOLD = 17;
 
 export function drawLabels(json) {
   labelsLayer.clearLayers();
@@ -155,7 +231,6 @@ const throttledDrawLabels = throttle(() => {
 
 map.on('zoomend moveend', throttledDrawLabels);
 
-// Geometry drawing
 function resetLayers() {
   Object.values(layers).forEach(groupSet => {
     if (groupSet instanceof L.LayerGroup) { groupSet.clearLayers(); return; }
@@ -183,9 +258,7 @@ export function drawGeometry(json) {
   const nodeIdToSection = {};
   for (const sec of nodeSections) {
     if (json.sections1 && json.sections1[sec]) {
-      for (const id in json.sections1[sec]) {
-        nodeIdToSection[id] = sec;
-      }
+      for (const id in json.sections1[sec]) nodeIdToSection[id] = sec;
     }
   }
 
@@ -252,7 +325,8 @@ export function drawGeometry(json) {
   throttledDrawLabels();
 }
 
-// Highlight element on map
+// --- HIGHLIGHTING ---
+
 export function highlightElement(section, id) {
   layers.select.clearLayers();
 
@@ -274,19 +348,17 @@ export function highlightElement(section, id) {
   if (t === 'nodes') {
     const ll = xyToLatLng(geo[0], geo[1]);
     L.circleMarker(ll, { radius: 10, color: C.select, weight: 4, fill: false, opacity: .95 }).addTo(layers.select);
-    map.panTo(ll, { animate: true });
   } else if (t === 'links') {
     const ll = geo.map(p => xyToLatLng(p[0], p[1]));
     L.polyline(ll, { color: C.select, weight: 8, opacity: .8 }).addTo(layers.select);
-    map.fitBounds(L.latLngBounds(ll), { padding: [20, 20] });
   } else if (t === 'subs') {
     const ll = geo.map(p => xyToLatLng(p[0], p[1]));
     L.polygon(ll, { color: C.select, weight: 5, fill: false, opacity: .95 }).addTo(layers.select);
-    map.fitBounds(L.latLngBounds(ll), { padding: [20, 20] });
   }
 }
 
-// Map popup functionality
+// --- POPUPS & SELECTION ---
+
 let lastClickedElements = [];
 let lastClickIndex = 0;
 let lastClickLatLng = null;
@@ -339,21 +411,45 @@ function generatePopupContent(section, id) {
   return html;
 }
 
-function showMapPopup(latlng, elements, isNewClick = true) {
+function showMapPopup(clickLatlng, elements, isNewClick = true) {
   if (!elements || elements.length === 0) return;
 
   if (isNewClick) {
-    lastClickIndex = 0;
-    lastClickedElements = elements;
-    lastClickLatLng = latlng;
-  }
+    const isSameSet = JSON.stringify(elements) === JSON.stringify(lastClickedElements);
 
-  if (isNewClick && JSON.stringify(elements) === JSON.stringify(lastClickedElements)) {
-    lastClickIndex = (lastClickIndex + 1) % elements.length;
+    if (isSameSet) {
+      lastClickIndex = (lastClickIndex + 1) % elements.length;
+    } else {
+      lastClickIndex = 0;
+      lastClickedElements = elements;
+    }
+    lastClickLatLng = clickLatlng;
   }
 
   const selected = elements[lastClickIndex];
   const { id, section } = selected;
+
+  // Calculate Centroid
+  let targetLatLng = lastClickLatLng;
+  const t = secType(section);
+
+  if (t && state.LAST.json) {
+    const g1 = state.LAST.json.geometry[t === 'nodes' ? 'nodes1' : t === 'links' ? 'links1' : 'subs1'];
+    const g2 = state.LAST.json.geometry[t === 'nodes' ? 'nodes2' : t === 'links' ? 'links2' : 'subs2'];
+    const geo = (g2 && g2[id] !== undefined) ? g2[id] : (g1 ? g1[id] : undefined);
+
+    if (geo) {
+      if (t === 'nodes') {
+        targetLatLng = xyToLatLng(geo[0], geo[1]);
+      } else if (t === 'links') {
+        const mid = midOfLine(geo);
+        if (mid) targetLatLng = xyToLatLng(mid[0], mid[1]);
+      } else if (t === 'subs') {
+        const cent = centroidOfPoly(geo);
+        if (cent) targetLatLng = xyToLatLng(cent[0], cent[1]);
+      }
+    }
+  }
 
   const content = generatePopupContent(section, id);
   const cycleText = elements.length > 1 ? `<div style="display:flex;justify-content:space-between;align-items:center;font-size:11px;color:#777;margin-top:8px;padding-top:4px;border-top:1px solid #f0f0f0;">
@@ -363,46 +459,90 @@ function showMapPopup(latlng, elements, isNewClick = true) {
   </div>` : "";
 
   L.popup({ minWidth: 250, maxWidth: 400 })
-    .setLatLng(latlng)
+    .setLatLng(targetLatLng)
     .setContent(content + cycleText)
     .openOn(map);
 
   highlightElement(section, id);
 }
 
+// Updated: Pixel-based selection with Conduit Trimming and Explicit Priority
 function findNearbyElements(latlng) {
-  const nearby = [];
-  const toleranceInFeet = 20;
-  const toleranceInMeters = toleranceInFeet * 0.3048;
+  const nodes = [];
+  const links = [];
+  const subs = [];
+
+  const P = map.latLngToContainerPoint(latlng);
+
+  const LINK_TOLERANCE_PX = 10;
+  const NODE_TOLERANCE_PX = 10;
 
   map.eachLayer(layer => {
     if (!layer.swmmInfo) return;
 
-    let distance = Infinity;
     if (layer instanceof L.Marker || layer instanceof L.CircleMarker) {
-      distance = latlng.distanceTo(layer.getLatLng());
-    } else if (layer instanceof L.Polyline) {
-      const latlngs = layer.getLatLngs();
-      for (const p of (Array.isArray(latlngs[0]) ? latlngs.flat() : latlngs)) {
-        distance = Math.min(distance, latlng.distanceTo(p));
+      const pLoc = map.latLngToContainerPoint(layer.getLatLng());
+      if (P.distanceTo(pLoc) < NODE_TOLERANCE_PX) {
+        nodes.push(layer.swmmInfo);
       }
-    } else if (layer instanceof L.Polygon) {
-      if (layer.getBounds().contains(latlng)) distance = 0;
     }
-
-    if (distance < toleranceInMeters) {
-      nearby.push(layer.swmmInfo);
+    else if (layer instanceof L.Polyline && !(layer instanceof L.Polygon)) {
+      if (isClickOnLink(P, layer, LINK_TOLERANCE_PX)) {
+        links.push(layer.swmmInfo);
+      }
+    }
+    else if (layer instanceof L.Polygon) {
+      const latlngs = layer.getLatLngs();
+      const shell = Array.isArray(latlngs[0]) ? latlngs[0] : latlngs;
+      if (isPointInPoly(latlng, shell)) {
+        subs.push(layer.swmmInfo);
+      }
     }
   });
-  return nearby;
+
+  // Explicit Priority: Nodes > Links > Subs
+  return [...nodes, ...links, ...subs];
 }
+
+// Fast check for cursor hover
+function hasHoverElement(latlng) {
+  const P = map.latLngToContainerPoint(latlng);
+  const LINK_TOLERANCE_PX = 10;
+  const NODE_TOLERANCE_PX = 10;
+
+  let found = false;
+  map.eachLayer(layer => {
+    if (found || !layer.swmmInfo) return;
+
+    if (layer instanceof L.Marker || layer instanceof L.CircleMarker) {
+      const pLoc = map.latLngToContainerPoint(layer.getLatLng());
+      if (P.distanceTo(pLoc) < NODE_TOLERANCE_PX) found = true;
+    }
+    else if (layer instanceof L.Polyline && !(layer instanceof L.Polygon)) {
+      if (isClickOnLink(P, layer, LINK_TOLERANCE_PX)) found = true;
+    }
+    else if (layer instanceof L.Polygon) {
+      const latlngs = layer.getLatLngs();
+      const shell = Array.isArray(latlngs[0]) ? latlngs[0] : latlngs;
+      if (isPointInPoly(latlng, shell)) found = true;
+    }
+  });
+  return found;
+}
+
+// Map Event Listeners
 
 map.on('click', (e) => {
   const clickedElements = findNearbyElements(e.latlng);
   if (clickedElements.length > 0) showMapPopup(e.latlng, clickedElements, true);
 });
 
-// Initialize CRS change handler
+// Cursor Hover Effect
+map.on('mousemove', throttle((e) => {
+  const hit = hasHoverElement(e.latlng);
+  document.getElementById('map').style.cursor = hit ? 'pointer' : '';
+}, 40)); // Throttle to 40ms (~25fps) for performance
+
 document.getElementById('crsSelect').addEventListener('change', (e) => {
   state.CURRENT_CRS = e.target.value;
   proj4.defs(state.CURRENT_CRS, state.PROJECTIONS[state.CURRENT_CRS]);
@@ -412,12 +552,9 @@ document.getElementById('crsSelect').addEventListener('change', (e) => {
   }
 });
 
-// Initialize basemap selector
 document.getElementById('basemapSelect').addEventListener('change', (e) => setBasemap(e.target.value));
 
-// Initialize labels toggle
 document.getElementById('labelsToggle').addEventListener('change', () => {
   if (!state.LAST.json) return;
   throttledDrawLabels();
 });
-

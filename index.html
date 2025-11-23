@@ -1,5 +1,6 @@
 <!doctype html>
 <html lang="en">
+
 <head>
   <meta charset="utf-8" />
   <title>SWMM Comparison App</title>
@@ -12,6 +13,7 @@
   <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
   <link rel="stylesheet" href="styles.css" />
 </head>
+
 <body>
   <header>
     <div class="menu">
@@ -78,16 +80,20 @@
           <label><input type="checkbox" id="fAdded" checked> Added</label>
           <label><input type="checkbox" id="fRemoved" checked> Removed</label>
           <label><input type="checkbox" id="fChanged" checked> Changed</label>
-          <label style="margin-left: 10px; border-left: 1px solid #ddd; padding-left: 10px;"><input type="checkbox" id="fShowDiffs"> Show Diffs</label>
+          <label style="margin-left: 10px; border-left: 1px solid #ddd; padding-left: 10px;"><input type="checkbox"
+              id="fShowDiffs"> Show Diffs</label>
           <input id="search" placeholder="Filter rows…" />
           <span id="currentSectionLabel" style="color:#333;font-weight:600;"></span>
         </div>
       </div>
 
       <div id="detailsWrap" style="flex:1;">
-        <div id="tableWrap" class="panel" style="display:flex; flex-direction:column; min-height:0; padding-right: 12px;">
+        <div id="tableWrap" class="panel"
+          style="display:flex; flex-direction:column; min-height:0; padding-right: 12px;">
           <h3 style="margin-bottom:8px;">Details</h3>
-          <div id="tableContainer"><table id="table"></table></div>
+          <div id="tableContainer">
+            <table id="table"></table>
+          </div>
         </div>
 
         <div id="map-v-splitter" class="splitter v-splitter"></div>
@@ -123,14 +129,20 @@
     </div>
   </div>
 
-  <div id="compareModalBackdrop" style="position:fixed;inset:0;background:rgba(0,0,0,.35);display:none;align-items:center;justify-content:center;z-index:10000;" onclick="if(event.target===this) closeCompareModal()">
-    <div id="compareModal" style="background:#fff;border-radius:10px;border:1px solid #ddd;max-width:550px;width:90vw;display:flex;flex-direction:column;">
-      <header style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:1px solid #eee">
+  <div id="compareModalBackdrop"
+    style="position:fixed;inset:0;background:rgba(0,0,0,.35);display:none;align-items:center;justify-content:center;z-index:10000;"
+    onclick="if(event.target===this) closeCompareModal()">
+    <div id="compareModal"
+      style="background:#fff;border-radius:10px;border:1px solid #ddd;max-width:550px;width:90vw;display:flex;flex-direction:column;">
+      <header
+        style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:1px solid #eee">
         <h2 style="margin:0;font-size:16px">Run Comparison with Tolerances</h2>
         <button onclick="closeCompareModal()">Cancel</button>
       </header>
       <div class="body" style="padding:10px 14px;overflow:auto; display: grid; grid-template-columns: 1fr; gap: 12px;">
-        <h3 style="grid-column: 1 / -1; margin: 0; font-size: 14px; border-bottom: 1px solid #eee; padding-bottom: 8px;">Model Files</h3>
+        <h3
+          style="grid-column: 1 / -1; margin: 0; font-size: 14px; border-bottom: 1px solid #eee; padding-bottom: 8px;">
+          Model Files</h3>
         <div class="file-input-container">
           <label for="f1" class="file-btn-label" style="color: #222; border-color: #ccc;">First .inp</label>
           <input id="f1" type="file" accept=".inp,.txt" />
@@ -143,40 +155,67 @@
         </div>
       </div>
 
-      <div class="body" style="padding:10px 14px;overflow:auto; display: grid; grid-template-columns: 1fr 1fr; gap: 12px 20px;">
-        <h3 style="grid-column: 1 / -1; margin: 0; font-size: 14px; border-bottom: 1px solid #eee; padding-bottom: 8px;">Numerical Tolerances</h3>
+      <div class="body"
+        style="padding:10px 14px;overflow:auto; display: grid; grid-template-columns: 1fr 1fr; gap: 12px 20px;">
+        <h3
+          style="grid-column: 1 / -1; margin: 0; font-size: 14px; border-bottom: 1px solid #eee; padding-bottom: 8px;">
+          Numerical Tolerances</h3>
         <p style="grid-column: 1 / -1; margin: 0 0 8px 0; font-size: 12px; color: #555;">
-          Changes to the fields below will be ignored if the absolute difference is less than or equal to the specified tolerance.
+          Changes to the fields below will be ignored if the absolute difference is less than or equal to the specified
+          tolerance.
         </p>
-        <label>Conduit: Length<input type="number" id="tol_conduit_length" value="0" step="0.1" class="tol-input"></label>
-        <label>Junction: Invert Elev<input type="number" id="tol_junction_invert" value="0" step="0.01" class="tol-input"></label>
-        <label>Conduit: In/Out Offset<input type="number" id="tol_conduit_offset" value="0" step="0.01" class="tol-input"></label>
-        <label>Junction: Max Depth<input type="number" id="tol_junction_depth" value="0" step="0.01" class="tol-input"></label>
+        <label>Conduit: Length<input type="number" id="tol_conduit_length" value="0" step="0.1"
+            class="tol-input"></label>
+        <label>Junction: Invert Elev<input type="number" id="tol_junction_invert" value="0" step="0.01"
+            class="tol-input"></label>
+        <label>Conduit: In/Out Offset<input type="number" id="tol_conduit_offset" value="0" step="0.01"
+            class="tol-input"></label>
+        <label>Junction: Max Depth<input type="number" id="tol_junction_depth" value="0" step="0.01"
+            class="tol-input"></label>
+        <label>Conduit: Roughness<input type="number" id="tol_conduit_roughness" value="0" step="0.001"
+            class="tol-input"></label>
       </div>
-      <div class="foot" style="display:flex;gap:8px;justify-content:flex-end;padding:10px 14px;border-top:1px solid #eee">
+      <div class="foot"
+        style="display:flex;gap:8px;justify-content:flex-end;padding:10px 14px;border-top:1px solid #eee">
         <button id="runCompareFromModal" class="primary" style="min-width: 120px;">Run Comparison</button>
       </div>
     </div>
   </div>
 
-  <div id="helpModalBackdrop" style="position:fixed;inset:0;background:rgba(0,0,0,.35);display:none;align-items:center;justify-content:center;z-index:10000;" onclick="if(event.target===this) closeHelpModal()">
-    <div id="helpModal" style="background:#fff;border-radius:10px;border:1px solid #ddd;max-width:600px;width:90vw;max-height:80vh;display:flex;flex-direction:column;">
-      <header style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:1px solid #eee">
+  <div id="helpModalBackdrop"
+    style="position:fixed;inset:0;background:rgba(0,0,0,.35);display:none;align-items:center;justify-content:center;z-index:10000;"
+    onclick="if(event.target===this) closeHelpModal()">
+    <div id="helpModal"
+      style="background:#fff;border-radius:10px;border:1px solid #ddd;max-width:600px;width:90vw;max-height:80vh;display:flex;flex-direction:column;">
+      <header
+        style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:1px solid #eee">
         <h2 style="margin:0;font-size:16px">How to Use This App</h2>
         <button onclick="closeHelpModal()">Close</button>
       </header>
       <div class="body" style="padding:10px 14px;overflow:auto">
-        <p>This application helps you compare two SWMM .inp files to identify differences in their structure and parameters. This application is still in testing and may miss edge cases not yet covered by the comparison.</p>
+        <p>This application helps you compare two SWMM .inp files to identify differences in their structure and
+          parameters. This application is still in testing and may miss edge cases not yet covered by the comparison.
+        </p>
         <ul>
-          <li><strong>Load SWMM .inp Files:</strong> Use the "First .inp" and "Second .inp" buttons to select your two model files, then click "Compare".</li>
-          <li><strong>File Menu:</strong> Use the "File" dropdown to save the current comparison, load a previous one, or export the differences to an Excel file.</li>
-          <li><strong>Map Adjustments:</strong> Use the "Map" dropdown to change visualization and add node labels.</li>
-          <li><strong>View Summary:</strong> The "Summary" panel shows a high-level count of added, removed, and changed elements for each section.</li>
-          <li><strong>Explore Sections:</strong> Click a section in the "Sections" panel to view detailed changes in the table on the right.</li>
+          <li><strong>Load SWMM .inp Files:</strong> Use the "First .inp" and "Second .inp" buttons to select your two
+            model files, then click "Compare".</li>
+          <li><strong>File Menu:</strong> Use the "File" dropdown to save the current comparison, load a previous one,
+            or export the differences to an Excel file.</li>
+          <li><strong>Map Adjustments:</strong> Use the "Map" dropdown to change visualization and add node labels.
+          </li>
+          <li><strong>View Summary:</strong> The "Summary" panel shows a high-level count of added, removed, and
+            changed
+            elements for each section.</li>
+          <li><strong>Explore Sections:</strong> Click a section in the "Sections" panel to view detailed changes in
+            the
+            table on the right.</li>
           <li><strong>Interact with the Table:</strong>
             <ul style="margin-top: 10px;">
-              <li><strong>Single-click</strong> a row in the details table to automatically pan and zoom the map to that element, highlighting it in cyan.</li>
-              <li><strong>Double-click</strong> a row to open a detailed pop-up window showing the old and new values for that specific element side-by-side.</li>
+              <li><strong>Single-click</strong> a row in the details table to automatically pan and zoom the map to
+                that
+                element, highlighting it in cyan.</li>
+              <li><strong>Double-click</strong> a row to open a detailed pop-up window showing the old and new values
+                for that specific element side-by-side.</li>
             </ul>
           </li>
         </ul>
@@ -187,1105 +226,17 @@
   <script type="module" src="app.js"></script>
 
 </body>
+
 </html>
-      proj4.defs(CURRENT_CRS, PROJECTIONS[CURRENT_CRS]);
-      XY_LATLNG_CACHE.clear();
-      if (LAST.json) {
-        drawGeometry(LAST.json);
-      }
-    });
+</ul>
+</li>
+</ul>
+</div>
+</div>
+</div>
+
+<script type="module" src="app.js"></script>
 
-    const SESSION_VERSION = 1;
-    let FILES = { f1Name:null, f2Name:null, f1Bytes:null, f2Bytes:null };
-
-    function abToB64(ab) {
-      const bytes = new Uint8Array(ab);
-      let binary = '';
-      const chunkSize = 0x8000; // 32 KB chunks
-      for (let i = 0; i < bytes.length; i += chunkSize) {
-        const chunk = bytes.subarray(i, i + chunkSize);
-        binary += String.fromCharCode.apply(null, chunk);
-      }
-      return btoa(binary);
-    }
-
-    function b64ToAb(b64){
-      const bin = atob(b64);
-      const ab = new ArrayBuffer(bin.length);
-      const view = new Uint8Array(ab);
-      for (let i=0;i<bin.length;i++) view[i] = bin.charCodeAt(i);
-      return ab;
-    }
-
-    async function saveSession(){
-      if (!LAST.json) { alert("Run a comparison first."); return; }
-
-      const session = {
-        version: SESSION_VERSION,
-        createdUtc: new Date().toISOString(),
-        files: {
-          file1: FILES.f1Bytes ? { name: FILES.f1Name, bytesB64: abToB64(FILES.f1Bytes) } : null,
-          file2: FILES.f2Bytes ? { name: FILES.f2Name, bytesB64: abToB64(FILES.f2Bytes) } : null,
-        },
-        result: LAST.json,
-        ui: {
-          section: LAST.currentSection || null,
-          crs: CURRENT_CRS,
-          filters: {
-            Added:   document.getElementById('fAdded').checked,
-            Removed: document.getElementById('fRemoved').checked,
-            Changed: document.getElementById('fChanged').checked,
-            Search:  document.getElementById('search').value || ""
-          }
-        }
-      };
-
-      const blob = new Blob([JSON.stringify(session, null, 2)], { type: "application/json" });
-
-      if (window.showSaveFilePicker) {
-        try {
-          const handle = await window.showSaveFilePicker({
-            suggestedName: `inp_diff_session_${Date.now()}.json`,
-            types: [{
-              description: 'INP Diff Session',
-              accept: { 'application/json': ['.json'] }
-            }]
-          });
-          const writable = await handle.createWritable();
-          await writable.write(blob);
-          await writable.close();
-          setStatus("Session saved.");
-        } catch (err) {
-          if (err.name !== 'AbortError') console.error("Save failed:", err);
-        }
-      } else {
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `inp_diff_session_${Date.now()}.json`;
-        a.click();
-        URL.revokeObjectURL(url);
-      }
-    }
-
-    function applyUIState(ui){
-      if (!ui) return;
-      const f = ui.filters;
-      document.getElementById('fAdded').checked   = f?.Added   ?? true;
-      document.getElementById('fRemoved').checked = f?.Removed ?? true;
-      document.getElementById('fChanged').checked = f?.Changed ?? true;
-      if (typeof f.Search  === 'string')   document.getElementById('search').value = f.Search;
-
-      if (ui.crs && PROJECTIONS[ui.crs]) {
-        document.getElementById('crsSelect').value = ui.crs;
-        document.getElementById('crsSelect').dispatchEvent(new Event('change'));
-      }
-    }
-
-    function relabelHeaders(section, hdrs){
-      if (section !== "INFILTRATION") return hdrs;
-      const MAP = {
-        "Param1": "Max. Infil. Rate",
-        "Param 1": "Max. Infil. Rate",
-        "Param2": "Min. Infil. Rate",
-        "Param 2": "Min. Infil. Rate",
-        "Param3": "Decay Constant",
-        "Param 3": "Decay Constant",
-        "Param4": "Drying Time",
-        "Param 4": "Drying Time",
-        "Param5": "Max. Volume",
-        "Param 5": "Max. Volume",
-      };
-      return hdrs.map(h => MAP[h] ?? h);
-    }
-
-    function restoreFromResult(result, ui){
-      LAST.json = result;
-      applyUIState(ui); // Apply UI state (including CRS) first
-      renderSections(result);
-      drawGeometry(result);
-      if (ui?.section && result.diffs[ui.section]) {
-        LAST.currentSection = ui.section;
-        document.getElementById('currentSectionLabel').textContent = ui.section;
-        renderTableFor(ui.section);
-        const node = [...document.querySelectorAll('.sec')].find(n => n.dataset.sec === ui.section);
-        document.querySelectorAll('.sec').forEach(n=>n.classList.remove('active'));
-        node?.classList.add('active');
-      }
-      setStatus("Session loaded.");
-    }
-
-    async function loadSession(file){
-      try {
-        const text = await file.text();
-        const session = JSON.parse(text);
-
-        FILES = { f1Name:null, f2Name:null, f1Bytes:null, f2Bytes:null };
-        if (session.files?.file1?.bytesB64) {
-          FILES.f1Name  = session.files.file1.name || "file1.inp";
-          FILES.f1Bytes = b64ToAb(session.files.file1.bytesB64);
-        }
-        if (session.files?.file2?.bytesB64) {
-          FILES.f2Name  = session.files.file2.name || "file2.inp";
-          FILES.f2Bytes = b64ToAb(session.files.file2.bytesB64);
-        }
-
-        document.getElementById('f1-name').textContent = FILES.f1Name || '';
-        document.getElementById('f2-name').textContent = FILES.f2Name || '';
-
-        if (session.result) {
-          restoreFromResult(session.result, session.ui);
-        } else if (FILES.f1Bytes && FILES.f2Bytes) {
-          setStatus("Recomputing comparison from saved INP files (using default tolerances)…");
-          worker.postMessage({ type:"compare", file1: FILES.f1Bytes, file2: FILES.f2Bytes, tolerances: {} }, [FILES.f1Bytes, FILES.f2Bytes]);
-        } else {
-          alert("Session file has no result data and no embedded INP files. Please select the INP files and run Compare.");
-        }
-      } catch (e) {
-        console.error(e);
-        alert("Could not load session: " + e.message);
-      }
-    }
-
-    document.getElementById('saveSess').addEventListener('click', saveSession);
-    document.getElementById('loadSessBtn').addEventListener('click', ()=> document.getElementById('loadSessInput').click());
-    document.getElementById('loadSessInput').addEventListener('change', (ev)=>{
-      const f = ev.target.files?.[0];
-      if (f) loadSession(f);
-    });
-
-    async function exportToExcel() {
-      if (!LAST.json) { alert("Please run a comparison first."); return; }
-      setStatus("Generating Excel file...");
-      await new Promise(resolve => setTimeout(resolve, 50));
-
-      const wb = XLSX.utils.book_new();
-      const { diffs, headers } = LAST.json;
-
-      // Define styles
-      const styles = {
-        header: { font: { bold: true }, fill: { fgColor: { rgb: "FFFAFAFA" } } },
-        added:  { fill: { fgColor: { rgb: "FFEAF7EF" } }, font: { color: { rgb: "FF1E7B3A" } } },
-        removed:{ fill: { fgColor: { rgb: "FFFDEAEA" } }, font: { color: { rgb: "FFA52222" } } },
-        changed:{ fill: { fgColor: { rgb: "FFFFF6E6" } }, font: { color: { rgb: "FF935C00" } } },
-        pillAdded:  { fill: { fgColor: { rgb: "FFCDEED6" } }, font: { bold: true, color: { rgb: "FF1E7B3A" } } },
-        pillRemoved:{ fill: { fgColor: { rgb: "FFF7C7C7" } }, font: { bold: true, color: { rgb: "FFA52222" } } },
-        pillChanged:{ fill: { fgColor: { rgb: "FFFFE0A8" } }, font: { bold: true, color: { rgb: "FF935C00" } } },
-      };
-
-      for (const sec of Object.keys(diffs).sort()) {
-        const d = diffs[sec];
-        let sheetData = [];
-        let hdrs = headers[sec] ? [...headers[sec]] : [];
-
-        if (sec === "HYDROGRAPHS") {
-          hdrs = ["Hydrograph", "Month", "Change Type"];
-          sheetData.push(["Element ID", "Change", ...hdrs]);
-          const rows = groupHydroSummary(d);
-          rows.forEach(r => {
-            sheetData.push([`${r.hydro} ${r.month}`, r.changeType.includes("Added") || r.changeType.includes("Removed") ? r.changeType.split(',')[0] : "Changed", r.hydro, r.month, r.changeType]);
-          });
-        } else {
-          hdrs = relabelHeaders(sec, hdrs);
-          sheetData.push(["Element ID", "Change", ...hdrs]);
-
-          const rows = [];
-          for (const [id, arr] of Object.entries(d.added || {})) rows.push({type:'Added', id, oldArr:[], newArr:arr});
-          for (const [id, arr] of Object.entries(d.removed || {})) rows.push({type:'Removed', id, oldArr:arr, newArr:[]});
-          for (const [id, pair] of Object.entries(d.changed || {})) rows.push({type:'Changed', id, oldArr:pair[0], newArr:pair[1]});
-          rows.sort((a,b) => a.id.localeCompare(b.id));
-
-          rows.forEach(r => {
-            const row = [r.id, r.type];
-            const oldA = [r.id, ...r.oldArr];
-            const newA = [r.id, ...r.newArr];
-
-            for (let i = 0; i < hdrs.length; i++) {
-              const ov = oldA[i] ?? "";
-              const nv = newA[i] ?? "";
-
-              if (r.type === 'Added') row.push(nv);
-              else if (r.type === 'Removed') row.push(ov);
-              else row.push(ov === nv ? nv : `${ov} → ${nv}`);
-            }
-            sheetData.push(row);
-          });
-        }
-
-        const ws = XLSX.utils.aoa_to_sheet(sheetData);
-
-        const colWidths = sheetData[0].map(h => h.length);
-        for (let R = 0; R < sheetData.length; ++R) {
-          for (let C = 0; C < sheetData[R].length; ++C) {
-            const cell_address = { c: C, r: R };
-            const cell_ref = XLSX.utils.encode_cell(cell_address);
-            if (!ws[cell_ref]) continue;
-
-            const cellValue = sheetData[R][C]?.toString() || "";
-            if (cellValue.length > colWidths[C]) colWidths[C] = cellValue.length;
-
-            if (R === 0) {
-              ws[cell_ref].s = styles.header;
-            } else if (C === 1) {
-              const changeType = sheetData[R][C];
-              if (changeType.includes('Added')) ws[cell_ref].s = styles.pillAdded;
-              else if (changeType.includes('Removed')) ws[cell_ref].s = styles.pillRemoved;
-              else ws[cell_ref].s = styles.pillChanged;
-            } else if (sec !== "HYDROGRAPHS" && C > 1) {
-              const changeType = sheetData[R][1];
-              if (changeType === 'Added') ws[cell_ref].s = styles.added;
-              else if (changeType === 'Removed') ws[cell_ref].s = styles.removed;
-              else if (cellValue.includes('→')) ws[cell_ref].s = styles.changed;
-            }
-          }
-        }
-        ws['!cols'] = colWidths.map(w => ({ wch: Math.min(w + 2, 60) }));
-
-        const sheetName = sec.replace(/[:\\/?*[\]]/g, "").substring(0, 31);
-        XLSX.utils.book_append_sheet(wb, ws, sheetName);
-      }
-
-      const f1Name = document.getElementById('f1-name').textContent || "file1";
-      const f2Name = document.getElementById('f2-name').textContent || "file2";
-      const filename = `SWMM_Compare_${f1Name}_vs_${f2Name}.xlsx`;
-
-      XLSX.writeFile(wb, filename);
-      setStatus("Excel file generated.");
-    }
-
-    document.getElementById('exportXlsx').addEventListener('click', exportToExcel);
-
-    let LAST = { json:null, currentSection:null }; // Moved LAST declaration here to ensure it's initialized early.
-    // Use canvas renderer for better performance with large datasets
-    const map = L.map('map', { zoomControl:true, maxZoom: 22, renderer: L.canvas() }).setView([39.1031, -84.5120], 12);
-
-    // Create panes to control rendering order (subs < links < nodes)
-    map.createPane('subcatchmentPane').style.zIndex = 380;
-    map.createPane('linkPane').style.zIndex = 390;
-    map.createPane('nodePane').style.zIndex = 410; // Above default overlayPane (400)
-
-
-    const baseLayers = {
-      street: L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution:"&copy; OpenStreetMap"
-      }),
-      aerial: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-        attribution: 'Tiles &copy; Esri'
-      })
-    };
-    let activeBase = null;
-    function setBasemap(which){
-      if (activeBase) map.removeLayer(activeBase);
-      if (which === 'none'){ activeBase = null; return; }
-      activeBase = baseLayers[which] || baseLayers.street;
-      activeBase.addTo(map);
-    }
-    setBasemap('street');
-    document.getElementById('basemapSelect').addEventListener('change', (e)=> setBasemap(e.target.value));
-
-    map.addControl(new (L.Control.extend({ onAdd(){ return document.getElementById('legend').content.firstElementChild.cloneNode(true); } }))({ position:"bottomleft" }));
-
-    let layers = {
-      nodes: { unchanged: L.layerGroup().addTo(map), changed: L.layerGroup().addTo(map), added: L.layerGroup().addTo(map), removed: L.layerGroup().addTo(map) },
-      links: { unchanged: L.layerGroup().addTo(map), changed: L.layerGroup().addTo(map), added: L.layerGroup().addTo(map), removed: L.layerGroup().addTo(map) },
-      subs:  { unchanged: L.layerGroup().addTo(map), changed: L.layerGroup().addTo(map), added: L.layerGroup().addTo(map), removed: L.layerGroup().addTo(map) },
-      select: L.layerGroup().addTo(map)
-    };
-    const C = { unchanged:"#7f8c8d", changed:"#f39c12", added:"#2ecc71", removed:"#e74c3c", select:"#00FFFF" };
-
-    function resetLayers() {
-      Object.values(layers).forEach(groupSet=>{
-        if (groupSet instanceof L.LayerGroup) { groupSet.clearLayers(); return; }
-        Object.values(groupSet).forEach(g=>g.clearLayers());
-      });
-    }
-
-    function xyToLatLng(x, y) {
-      const [lon, lat] = proj4(CURRENT_CRS, "EPSG:4326", [x, y]);
-      return [lat, lon];
-    }
-
-    function coordsToLatLng(coords) {
-      return coords.map(p => xyToLatLng(p[0], p[1]));
-    }
-
-    const secType = (sec) => (["JUNCTIONS","OUTFALLS","DIVIDERS","STORAGE"].includes(sec) ? "nodes" :
-                              ["CONDUITS","PUMPS","ORIFICES","WEIRS","OUTLETS"].includes(sec) ? "links" :
-                              sec==="SUBCATCHMENTS" ? "subs" : null);
-
-    function buildSets(diffs, renames) {
-      const sets = {
-        nodes:{added:new Set(), removed:new Set(), changed:new Set(), base:new Set()},
-        links:{added:new Set(), removed:new Set(), changed:new Set(), base:new Set()},
-        subs:{added:new Set(), removed:new Set(), changed:new Set(), base:new Set()}
-      };
-      for (const [sec, d] of Object.entries(diffs)) {
-        const t = secType(sec); if (!t) continue;
-        Object.keys(d.added || {}).forEach(id => sets[t].added.add(id));
-        Object.keys(d.removed || {}).forEach(id => sets[t].removed.add(id));
-        Object.keys(d.changed || {}).forEach(id => sets[t].changed.add(id));
-      }
-      for (const [sec, mapping] of Object.entries(renames||{})) {
-        const t = secType(sec); if (!t) continue;
-        Object.keys(mapping).forEach(oldId => sets[t].changed.add(oldId));
-      }
-      return sets;
-    }
-
-    const labelsLayer = L.layerGroup().addTo(map);
-    const LABEL_ZOOM_THRESHOLD = 17;
-
-    function midOfLine(coords){
-      if (!coords || coords.length === 0) return null;
-      if (coords.length === 1) return coords[0];
-      const segs = [];
-      let total = 0;
-      for (let i=1; i<coords.length; i++){
-        const a = coords[i-1], b = coords[i];
-        const dx = b[0] - a[0], dy = b[1] - a[1];
-        const len = Math.hypot(dx, dy);
-        segs.push({a, b, len});
-        total += len;
-      }
-      const half = total / 2;
-      let acc = 0;
-      for (const s of segs){
-        if (acc + s.len >= half){
-          const t = (half - acc) / (s.len || 1);
-          return [ s.a[0] + t*(s.b[0]-s.a[0]), s.a[1] + t*(s.b[1]-s.a[1]) ];
-        }
-        acc += s.len;
-      }
-      return coords[Math.floor(coords.length/2)];
-    }
-
-    function centroidOfPoly(coords){
-      if (!coords || coords.length === 0) return null;
-      let x = 0, y = 0;
-      for (const p of coords){ x += p[0]; y += p[1]; }
-      return [x/coords.length, y/coords.length];
-    }
-
-    function drawLabels(json){
-      labelsLayer.clearLayers();
-      if (!document.getElementById('labelsToggle').checked) return;
-      if (map.getZoom() < LABEL_ZOOM_THRESHOLD) return;
-
-      const geom = json.geometry;
-      const bounds = map.getBounds();
-
-      const nodeKeys = new Set([...(Object.keys(geom.nodes2||{})), ...(Object.keys(geom.nodes1||{}))]);
-      nodeKeys.forEach(id=>{
-        const xy = (geom.nodes2 && geom.nodes2[id]) || (geom.nodes1 && geom.nodes1[id]);
-        if (!xy) return;
-        const ll = xyToLatLng(xy[0], xy[1]);
-        if (bounds.contains(ll)) {
-          L.tooltip({ permanent: true, direction: 'top', className: 'map-label', offset: [0, -5] })
-            .setLatLng(ll).setContent(id).addTo(labelsLayer);
-        }
-      });
-
-      const subKeys = new Set([...(Object.keys(geom.subs2||{})), ...(Object.keys(geom.subs1||{}))]);
-      subKeys.forEach(id=>{
-        const coords = (geom.subs2 && geom.subs2[id]) || (geom.subs1 && geom.subs1[id]);
-        if (!coords || coords.length < 3) return;
-        const centerXY = centroidOfPoly(coords);
-        const ll = xyToLatLng(centerXY[0], centerXY[1]);
-        if (bounds.contains(ll)) {
-          L.tooltip({ permanent: true, direction: 'center', className: 'map-label' }).setLatLng(ll).setContent(id).addTo(labelsLayer);
-        }
-      });
-    }
-
-    document.getElementById('labelsToggle').addEventListener('change', ()=>{
-      if (!LAST.json) return;
-      throttledDrawLabels();
-    });
-
-    const NODE_ICON_CACHE = new Map();
-
-    const throttledDrawLabels = throttle(() => {
-      if (!LAST.json) return;
-      drawLabels(LAST.json);
-    }, 200);
-
-    map.on('zoomend moveend', throttledDrawLabels);
-
-    function drawGeometry(json) {
-      resetLayers();
-      const geom = json.geometry;
-      const sets = buildSets(json.diffs, json.renames);
-
-      const collectBase = (obj1,obj2)=> new Set([...Object.keys(obj1||{}), ...Object.keys(obj2||{})]);
-      sets.nodes.base = collectBase(json.geometry.nodes1, json.geometry.nodes2);
-      sets.links.base = collectBase(json.geometry.links1, json.geometry.links2);
-      sets.subs.base  = collectBase(json.geometry.subs1,  json.geometry.subs2);
-
-      const unchanged = {
-        nodes:new Set([...sets.nodes.base].filter(x=>!sets.nodes.added.has(x)&&!sets.nodes.removed.has(x)&&!sets.nodes.changed.has(x))),
-        links:new Set([...sets.links.base].filter(x=>!sets.links.added.has(x)&&!sets.links.removed.has(x)&&!sets.links.changed.has(x))),
-        subs: new Set([...sets.subs.base ].filter(x=>!sets.subs.added.has(x) &&!sets.subs.removed.has(x) &&!sets.subs.changed.has(x)))
-      };
-
-      const nodeSections = ["JUNCTIONS", "OUTFALLS", "DIVIDERS", "STORAGE"];
-      const nodeIdToSection = {};
-      // Build a complete map of all node IDs to their section by looking in the original parsed sections from file 1.
-      // This is necessary to correctly identify the type of UNCHANGED nodes.
-      for (const sec of nodeSections) {
-        if (json.sections1 && json.sections1[sec]) {
-          for (const id in json.sections1[sec]) {
-            nodeIdToSection[id] = sec;
-          }
-        }
-      }
-
-      const drawNode=(id,xy,color,target)=>{
-        const ll = xyToLatLng(xy[0],xy[1]);
-        // Use circleMarker for performance. It renders on canvas.
-        const sec = nodeIdToSection[id] || "JUNCTIONS";
-        const marker = L.circleMarker(ll, {
-          radius: 5, color: "#000", weight: 1, fillColor: color, fillOpacity: 1, pane: 'nodePane'
-        });
-        marker.swmmInfo = { id, section: sec, type: 'node' };
-        marker.addTo(layers.nodes[target]);
-      };
-
-      const linkIdToSection = {};
-      const linkSections = ["CONDUITS", "PUMPS", "ORIFICES", "WEIRS", "OUTLETS"];
-      for (const sec of linkSections) {
-        if (json.sections1 && json.sections1[sec]) for (const id in json.sections1[sec]) linkIdToSection[id] = sec;
-        if (json.sections2 && json.sections2[sec]) for (const id in json.sections2[sec]) linkIdToSection[id] = sec;
-      }
-
-      const drawLink=(id,coords,color,target)=>{
-        const ll=coords.map(p=>xyToLatLng(p[0],p[1]));
-        const polyline = L.polyline(ll,{color,weight:3,opacity:.95, pane: 'linkPane'});
-        const sec = linkIdToSection[id] || 'CONDUITS'; // Default to CONDUITS if not found
-        polyline.swmmInfo = { id, section: sec, type: 'link' };
-        polyline.addTo(layers.links[target]);
-      };
-      const drawSub=(id,coords,color,target)=>{
-        const ll=coords.map(p=>xyToLatLng(p[0],p[1]));
-        const polygon = L.polygon(ll,{color,weight:2,fill:true,fillOpacity:.25, pane: 'subcatchmentPane'});
-        polygon.swmmInfo = { id, section: 'SUBCATCHMENTS', type: 'sub' };
-        polygon.addTo(layers.subs[target]);
-      };
-
-      for (const id of unchanged.nodes) if (geom.nodes1?.[id]) drawNode(id, geom.nodes1[id], C.unchanged, "unchanged");
-      for (const id of sets.nodes.removed) if (geom.nodes1?.[id]) drawNode(id, geom.nodes1[id], C.removed, "removed");
-      for (const id of unchanged.links) if (geom.links1?.[id]) drawLink(id, geom.links1[id], C.unchanged, "unchanged");
-      for (const id of sets.links.removed) if (geom.links1?.[id]) drawLink(id, geom.links1[id], C.removed, "removed");
-      for (const id of unchanged.subs) if (geom.subs1?.[id]) drawSub(id, geom.subs1[id], C.unchanged, "unchanged");
-      for (const id of sets.subs.removed) if (geom.subs1?.[id]) drawSub(id, geom.subs1[id], C.removed, "removed");
-
-      for (const id of sets.nodes.changed) { const xy=geom.nodes2?.[id]; if (xy) drawNode(id, xy, C.changed, "changed");}
-      for (const id of sets.nodes.added) if (geom.nodes2?.[id]) drawNode(id, geom.nodes2[id], C.added, "added");
-      for (const id of sets.links.changed) { const ll=geom.links2?.[id]; if (ll) drawLink(id, ll, C.changed, "changed"); }
-      for (const id of sets.links.added) if (geom.links2?.[id]) drawLink(id, geom.links2[id], C.added, "added");
-
-      for (const id of sets.subs.changed) { const poly=geom.subs2?.[id]; if (poly) drawSub(id, poly, C.changed, "changed"); }
-      for (const id of sets.subs.added) if (geom.subs2?.[id]) drawSub(id, geom.subs2[id], C.added, "added");
-
-      const anyLL=[];
-      const pushAll=(g)=>{ if(!g) return; Object.values(g).forEach(v=>{ if(Array.isArray(v)&&v.length&&Array.isArray(v[0])){ coordsToLatLng(v).forEach(p=>anyLL.push(p));} else if(Array.isArray(v)){ anyLL.push(xyToLatLng(v[0],v[1])); }}); };
-      pushAll(geom.nodes1); pushAll(geom.nodes2); pushAll(geom.links1); pushAll(geom.links2); pushAll(geom.subs1); pushAll(geom.subs2);
-      if (anyLL.length) map.fitBounds(L.latLngBounds(anyLL), { padding:[20,20] });
-
-      throttledDrawLabels();
-    }
-
-    function groupHydroSummary(d) {
-      const allKeys = new Set([
-        ...Object.keys(d.added || {}),
-        ...Object.keys(d.removed || {}),
-        ...Object.keys(d.changed || {})
-      ]);
-      const grouped = new Map();
-      for (const k of allKeys) {
-        const parts = k.split(" ");
-        const hydro = parts[0] || "";
-        const month = parts[1] || "";
-        const gkey = `${hydro} ${month}`;
-        if (!grouped.has(gkey)) grouped.set(gkey, new Set());
-        const s = grouped.get(gkey);
-        if (d.added && (k in d.added)) s.add("Added");
-        if (d.removed && (k in d.removed)) s.add("Removed");
-        if (d.changed && (k in d.changed)) s.add("Changed");
-      }
-      const rows = [];
-      for (const [gkey, set] of grouped.entries()) {
-        const [hydro, month] = gkey.split(" ");
-        rows.push({ id: gkey, hydro, month, changeType: [...set].sort().join(", ") || "—" });
-      }
-      rows.sort((a,b)=> (a.hydro+b.month).localeCompare(b.hydro+b.month));
-      return rows;
-    }
-
-    function renderSections(json){
-      const diffs = json.diffs || {};
-      const cont = document.getElementById('sections');
-      const items = [];
-      for (const sec of Object.keys(diffs).sort()){
-        const d = diffs[sec];
-        const added   = Object.keys(d.added || {}).length;
-        const removed = Object.keys(d.removed || {}).length;
-        const changed = Object.keys(d.changed || {}).length;
-        items.push({ sec, added, removed, changed });
-      }
-      if (!items.length){ cont.textContent = "No sections with differences."; return; }
-      cont.innerHTML = "";
-      items.forEach(({sec, added, removed, changed})=>{
-        const div = document.createElement('div');
-        div.className = 'sec';
-        div.dataset.sec = sec;
-        div.innerHTML = `<span>${sec}</span>
-          <span class="counts">
-            <span class="pill added">+${added}</span>
-            <span class="pill removed">-${removed}</span>
-            <span class="pill changed">⚙${changed}</span>
-          </span>`;
-        div.onclick = ()=>{
-          document.querySelectorAll('.sec').forEach(n=>n.classList.remove('active'));
-          div.classList.add('active');
-          LAST.currentSection = sec;
-          document.getElementById('currentSectionLabel').textContent = sec;
-          renderTableFor(sec);
-        };
-        cont.appendChild(div);
-      });
-      cont.firstChild?.click();
-    }
-
-    function passChangeFilter(changeType){
-      const m = { Added:'fAdded', Removed:'fRemoved', Changed:'fChanged' };
-      const id = m[changeType] || null;
-      if (!id) return true;
-      return document.getElementById(id).checked;
-    }
-
-    function renderTableFor(sec){
-      const table = document.getElementById('table');
-      const { diffs, headers } = LAST.json;
-      const d = diffs[sec] || { added:{}, removed:{}, changed:{} };
-      const q = document.getElementById('search').value.trim().toLowerCase();
-
-      if (sec === "HYDROGRAPHS") {
-        const rows = groupHydroSummary(d);
-        const hdrs = ["Hydrograph","Month","ChangeType"];
-
-        let thead = `<thead><tr><th style="width:180px">ElementID</th><th style="width:110px">Change</th>`;
-        for (const h of hdrs) thead += `<th>${escapeHtml(h)}</th>`;
-        thead += `</tr></thead>`;
-
-        const fAdded = document.getElementById('fAdded').checked;
-        const fRemoved = document.getElementById('fRemoved').checked;
-        const fChanged = document.getElementById('fChanged').checked;
-
-        const filtered = rows.filter(r => {
-          const changeText = r.changeType.toLowerCase();
-          const matchesFilter = (fAdded && changeText.includes('added')) || (fRemoved && changeText.includes('removed')) || (fChanged && changeText.includes('changed'));
-          const matchesSearch = !q || (`${r.id} ${r.changeType}`).toLowerCase().includes(q);
-          return matchesFilter && matchesSearch;
-        });
-
-        const body = [];
-        for (const r of filtered) {
-          const type = r.changeType === "Added" || r.changeType === "Removed" ? r.changeType : "Changed";
-          const pill = type.toLowerCase();
-          let tr = `<tr class="row" data-hydro="${escapeHtml(r.hydro)}" data-month="${escapeHtml(r.month)}">`;
-          tr += `<td>${escapeHtml(`${r.hydro} ${r.month}`)}</td>`;
-          tr += `<td><span class="pill ${pill}">${type}</span></td>`;
-          tr += `<td>${escapeHtml(r.hydro)}</td><td>${escapeHtml(r.month)}</td><td>${escapeHtml(r.changeType)}</td>`;
-          tr += `</tr>`;
-          body.push(tr);
-        }
-
-        table.innerHTML = thead + `<tbody>${body.join("") || `<tr><td colspan="${hdrs.length+2}" style="color:#666;font-style:italic;">No rows match.</td></tr>`}</tbody>`;
-
-        table.querySelectorAll('tbody tr').forEach((tr)=>{
-          const hydro = tr.dataset.hydro;
-          const month = tr.dataset.month;
-          tr.onclick  = ()=> highlightElement(sec, `${hydro} ${month}`);
-          tr.ondblclick = ()=> openDetail("HYDROGRAPHS", `${hydro} ${month}`);
-        });
-        return;
-      }
-
-      const hdrs = headers[sec] || [];
-      const hdrsLabeled = relabelHeaders(sec, hdrs);
-      const originalHdrsLength = hdrsLabeled.length;
-
-      if (sec === 'JUNCTIONS') {
-        hdrsLabeled.push('Rim Elevation');
-      }
-
-      const showDiffs = document.getElementById('fShowDiffs').checked;
-
-      const diffHeaders = [];
-      if (showDiffs) {
-        if (sec === 'CONDUITS') {
-          diffHeaders.push('Δ Length', 'Δ InOffset', 'Δ OutOffset');
-        } else if (sec === 'JUNCTIONS') { // Rim Elevation columns removed from here
-          diffHeaders.push('Δ InvertElev', 'Δ MaxDepth');
-        }
-      }
-
-      const rows = [];
-      const push = (type, id, oldArr, newArr, diffs) => rows.push({type,id,oldArr:(oldArr||[]),newArr:(newArr||[]), diffs:(diffs||{})});
-
-      for (const [id, arr] of Object.entries(d.added || {})) if (passChangeFilter('Added')) push('Added', id, [], arr);
-      for (const [id, arr] of Object.entries(d.removed || {})) if (passChangeFilter('Removed')) push('Removed', id, arr, []);
-      for (const [id, changedObj] of Object.entries(d.changed || {})) {
-        if (passChangeFilter('Changed')) {
-          push('Changed', id, changedObj.values[0], changedObj.values[1], changedObj.diff_values);
-        }
-      }
-
-      const filt = q ? rows.filter(r => (r.id+' '+r.type+' '+r.oldArr.join(' ')+' '+r.newArr.join(' ')).toLowerCase().includes(q)) : rows.sort((a,b) => a.id.localeCompare(b.id));
-
-      let thead = `<thead><tr><th style="width:180px">ElementID</th><th style="width:110px">Change</th>`;
-      for (const h of hdrsLabeled) thead += `<th>${escapeHtml(h)}</th>`;
-      for (const h of diffHeaders) thead += `<th style="background:#eef3ff;">${escapeHtml(h)}</th>`;
-      thead += `</tr></thead>`;
-
-      const fmtNum = (n) => {
-        if (typeof n !== 'number' || !isFinite(n)) return '—';
-        const s = n.toFixed(3);
-        return s === '-0.000' ? '0.000' : s;
-      };
-
-      const tbodyParts = [];
-      for (const r of filt){
-        const pill = r.type.toLowerCase();
-        let tr = `<tr class="row">`;
-        tr += `<td>${escapeHtml(r.id)}</td>`;
-        tr += `<td><span class="pill ${pill}">${r.type}</span></td>`;
-
-        const len = hdrsLabeled.length; // Now use the full labeled headers length
-        let oldA, newA;
-
-        if (sec === "HYDROGRAPHS") {
-          const parts = r.id.split(' ');
-          const hydrograph = parts[0] || '';
-          const month = parts[1] || '';
-          const response = parts.slice(2).join(' ') || '';
-          oldA = [hydrograph, month, response, ...r.oldArr];
-          newA = [hydrograph, month, response, ...r.newArr];
-        } else {
-          oldA = [r.id, ...r.oldArr];
-          newA = [r.id, ...r.newArr];
-        }
-
-        while (oldA.length < len) oldA.push("");
-        while (newA.length < len) newA.push("");
-
-        for (let i=0;i<len;i++){
-          // Handle special calculated Rim Elevation column
-          if (sec === 'JUNCTIONS' && i === originalHdrsLength) {
-            const oldRim = r.diffs?.RimElevation_old;
-            const newRim = r.diffs?.RimElevation_new;
-
-            if (r.type === "Added") {
-              tr += `<td class="addedCell">${fmtNum(newRim)}</td>`;
-            } else if (r.type === "Removed") {
-              tr += `<td class="removedCell">${fmtNum(oldRim)}</td>`;
-            } else { // Changed or Unchanged
-              tr += (fmtNum(oldRim) !== fmtNum(newRim))
-                ? `<td><span class="diff">${fmtNum(oldRim)} <span class="arrow">→</span> ${fmtNum(newRim)}</span></td>`
-                : `<td>${fmtNum(newRim)}</td>`;
-            }
-          } else { // Handle normal columns
-            const ov = oldA[i] ?? "";
-            const nv = newA[i] ?? "";
-            if (r.type === "Added")      tr += `<td class="addedCell">${escapeHtml(nv)}</td>`;
-            else if (r.type === "Removed") tr += `<td class="removedCell">${escapeHtml(ov)}</td>`;
-            else tr += (ov !== nv)
-              ? `<td><span class="diff">${escapeHtml(ov)} <span class="arrow">→</span> ${escapeHtml(nv)}</span></td>`
-              : `<td>${escapeHtml(nv)}</td>`;
-          }
-        }
-
-        if (showDiffs) {
-          if (sec === 'CONDUITS') {
-            tr += `<td class="cell-changed">${fmtNum(r.diffs?.Length)}</td>`;
-            tr += `<td class="cell-changed">${fmtNum(r.diffs?.InOffset)}</td>`;
-            tr += `<td class="cell-changed">${fmtNum(r.diffs?.OutOffset)}</td>`;
-          } else if (sec === 'JUNCTIONS') {
-            tr += `<td class="cell-changed">${fmtNum(r.diffs?.InvertElev)}</td>`;
-            tr += `<td class="cell-changed">${fmtNum(r.diffs?.MaxDepth)}</td>`;
-          }
-        }
-
-        tr += `</tr>`;
-        tbodyParts.push(tr);
-      }
-
-      const totalCols = hdrsLabeled.length + diffHeaders.length + 2;
-      table.innerHTML = thead + `<tbody>${tbodyParts.join("") || `<tr><td colspan="${totalCols}" style="color:#666;font-style:italic;">No rows match.</td></tr>`}</tbody>`;
-
-      table.querySelectorAll('tbody tr').forEach((tr)=>{
-        const id = tr.children[0]?.textContent || "";
-        tr.onclick = ()=> highlightElement(sec, id);
-        tr.classList.add(`row-id-${id.replace(/[^a-zA-Z0-9]/g, '_')}`);
-        tr.addEventListener('highlight', () => tr.scrollIntoView({ behavior: 'smooth', block: 'center' }));
-
-        tr.ondblclick = ()=> openDetail(sec, id);
-      });
-    }
-
-    function escapeHtml(s){ return (s||"").replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"}[c])); }
-    function highlightElement(section, id){
-      layers.select.clearLayers();
-
-      // Highlight table row
-      document.querySelectorAll('#table .row.highlighted').forEach(r => r.classList.remove('highlighted'));
-      const safeId = id.replace(/[^a-zA-Z0-9]/g, '_');
-      const row = document.querySelector(`#table .row-id-${safeId}`);
-      if (row) { row.classList.add('highlighted'); row.dispatchEvent(new Event('highlight')); }
-
-      const t = secType(section);
-      if (!t) return;
-
-      const g1 = LAST.json.geometry[ t === 'nodes' ? 'nodes1' : t === 'links' ? 'links1' : 'subs1' ];
-      const g2 = LAST.json.geometry[ t === 'nodes' ? 'nodes2' : t === 'links' ? 'links2' : 'subs2' ];
-
-      const geo = (g2 && g2[id] !== undefined) ? g2[id] : (g1 ? g1[id] : undefined);
-
-      if (!geo) return;
-      if (t === 'nodes'){
-        const ll = xyToLatLng(geo[0], geo[1]);
-        L.circleMarker(ll, { radius:10, color:C.select, weight:4, fill:false, opacity:.95 }).addTo(layers.select);
-        map.panTo(ll, { animate:true });
-      } else if (t === 'links') {
-        const ll = geo.map(p=>xyToLatLng(p[0],p[1]));
-        L.polyline(ll, { color:C.select, weight:8, opacity:.8 }).addTo(layers.select);
-        map.fitBounds(L.latLngBounds(ll), { padding:[20,20] });
-      } else if (t === 'subs'){
-        const ll = geo.map(p=>xyToLatLng(p[0],p[1]));
-        L.polygon(ll, { color:C.select, weight:5, fill:false, opacity:.95 }).addTo(layers.select);
-        map.fitBounds(L.latLngBounds(ll), { padding:[20,20] });
-      }
-    }
-
-    function cycleMapPopup(direction) {
-      lastClickIndex = (lastClickIndex + direction + lastClickedElements.length) % lastClickedElements.length;
-      map.closePopup();
-      showMapPopup(lastClickLatLng, lastClickedElements, false);
-    }
-
-    function generatePopupContent(section, id) {
-      const { diffs, headers, renames } = LAST.json || {};
-      const d = diffs?.[section] || { added:{}, removed:{}, changed:{} };
-
-      const isAdded   = d.added && Object.prototype.hasOwnProperty.call(d.added, id);
-      const isRemoved = d.removed && Object.prototype.hasOwnProperty.call(d.removed, id);
-      const changeType = isAdded ? 'Added' : isRemoved ? 'Removed' : 'Changed';
-
-      const renameTo = renames?.[section]?.[id];
-      let html = `<div style="font-weight:bold;font-size:14px;border-bottom:1px solid #eee;padding-bottom:4px;margin-bottom:6px;">${escapeHtml(section)}: ${escapeHtml(id)}</div>`;
-      html += `<div style="margin-bottom:6px;"><span class="pill ${changeType.toLowerCase()}">${changeType}</span>`;
-      if (renameTo) {
-        html += `<span style="margin-left:4px;font-size:12px;color:#555;">(Renamed to ${escapeHtml(renameTo)})</span>`;
-      }
-      html += `</div>`;
-
-      if (changeType === 'Changed') {
-        const hdrs = relabelHeaders(section, headers?.[section] || []);
-        const oldArr = d.changed[id]?.[0] || [];
-        const newArr = d.changed[id]?.[1] || [];
-        const maxLen = Math.max(oldArr.length, newArr.length);
-        let changesHtml = '<ul style="margin:0;padding-left:18px;font-size:12px;">';
-        let changeCount = 0;
-        for (let i = 0; i < maxLen; i++) {
-          const ov = oldArr[i] ?? "";
-          const nv = newArr[i] ?? "";
-          if (ov !== nv) {
-            changeCount++;
-            const fieldName = hdrs[i+1] || `Field ${i+1}`;
-            changesHtml += `<li style="margin-bottom:4px;"><strong>${escapeHtml(fieldName)}:</strong> ${escapeHtml(ov)} → ${escapeHtml(nv)}</li>`;
-          }
-        }
-        if (changeCount > 0) {
-          html += changesHtml + '</ul>';
-        } else {
-          html += '<div style="font-size:12px;color:#666;">No parameter changes found.</div>';
-        }
-      }
-
-      return html;
-    }
-
-    function showMapPopup(latlng, elements, isNewClick = true) {
-      if (!elements || elements.length === 0) return;
-
-      if (isNewClick) {
-        lastClickIndex = 0;
-        lastClickedElements = elements;
-        lastClickLatLng = latlng;
-      }
-
-      if (isNewClick && JSON.stringify(elements) === JSON.stringify(lastClickedElements)) {
-         lastClickIndex = (lastClickIndex + 1) % elements.length;
-      }
-
-      const selected = elements[lastClickIndex];
-      const { id, section } = selected;
-
-      const content = generatePopupContent(section, id);
-      const cycleText = elements.length > 1 ? `<div style="display:flex;justify-content:space-between;align-items:center;font-size:11px;color:#777;margin-top:8px;padding-top:4px;border-top:1px solid #f0f0f0;">
-        <button onclick="cycleMapPopup(-1)" style="padding:2px 6px;font-size:14px;">‹</button>
-        <span>${lastClickIndex + 1} of ${elements.length}</span>
-        <button onclick="cycleMapPopup(1)" style="padding:2px 6px;font-size:14px;">›</button>
-      </div>` : "";
-
-      L.popup({ minWidth: 250, maxWidth: 400 })
-        .setLatLng(latlng)
-        .setContent(content + cycleText)
-        .openOn(map);
-
-      highlightElement(section, id);
-    }
-
-    let lastClickedElements = [];
-    let lastClickIndex = 0;
-    let lastClickLatLng = null;
-
-    function findNearbyElements(latlng) {
-      const nearby = [];
-      const toleranceInFeet = 20;
-      const toleranceInMeters = toleranceInFeet * 0.3048;
-
-      map.eachLayer(layer => {
-        if (!layer.swmmInfo) return;
-
-        let distance = Infinity;
-        if (layer instanceof L.Marker || layer instanceof L.CircleMarker) {
-          distance = latlng.distanceTo(layer.getLatLng());
-        } else if (layer instanceof L.Polyline) {
-          const latlngs = layer.getLatLngs();
-          for (const p of (Array.isArray(latlngs[0]) ? latlngs.flat() : latlngs)) {
-            distance = Math.min(distance, latlng.distanceTo(p));
-          }
-        } else if (layer instanceof L.Polygon) {
-          if (layer.getBounds().contains(latlng)) distance = 0; // Prioritize clicks inside a polygon
-        }
-
-        if (distance < toleranceInMeters) {
-          nearby.push(layer.swmmInfo);
-        }
-      });
-      return nearby;
-    }
-
-    map.on('click', (e) => {
-      const clickedElements = findNearbyElements(e.latlng);
-      if (clickedElements.length > 0) showMapPopup(e.latlng, clickedElements, true);
-    });
-
-    const worker = new Worker("worker.js");
-    function setStatus(s){ document.getElementById('status').textContent = s; }
-    worker.onmessage = (ev)=>{
-      const { type, payload, error } = ev.data || {};
-      if (type === "ready") { setStatus("Ready."); return; }
-      if (type === "progress") { setStatus(payload); return; }
-      if (type === "error") { setStatus(error || "Error"); alert(error); return; }
-      if (type === "result") {
-        try {
-          const json = JSON.parse(payload);
-          LAST.json = json;
-          renderSections(json);
-          drawGeometry(json);
-          setStatus("Done.");
-        } catch (e) {
-          console.error(e);
-          setStatus("Failed to parse result.");
-          alert("Failed to parse result JSON.");
-        }
-      }
-    };
-    worker.postMessage({ type:"init" });
-
-    function openCompareModal() {
-      document.getElementById('compareModalBackdrop').style.display = 'flex';
-    }
-    function closeCompareModal() { document.getElementById('compareModalBackdrop').style.display = 'none'; }
-
-    document.getElementById('go').addEventListener('click', openCompareModal);
-
-    document.getElementById('runCompareFromModal').addEventListener('click', async ()=>{
-      const f1 = document.getElementById('f1').files?.[0];
-      const f2 = document.getElementById('f2').files?.[0];
-      if (!f1 || !f2) { alert("Please select both INP files to compare."); return; }
-
-      const tolerances = {
-        "CONDUIT_LENGTH": parseFloat(document.getElementById('tol_conduit_length').value) || 0,
-        "CONDUIT_OFFSET": parseFloat(document.getElementById('tol_conduit_offset').value) || 0,
-        "JUNCTION_INVERT": parseFloat(document.getElementById('tol_junction_invert').value) || 0,
-        "JUNCTION_DEPTH": parseFloat(document.getElementById('tol_junction_depth').value) || 0,
-      };
-
-      setStatus("Reading files…");
-      const [b1, b2] = await Promise.all([f1.arrayBuffer(), f2.arrayBuffer()]);
-      setStatus("Running comparison…");
-      worker.postMessage({ type:"compare", file1: b1, file2: b2, tolerances: tolerances }, [b1, b2]);
-      closeCompareModal();
-    });
-
-    function updateFileName(inputId, spanId) {
-      const input = document.getElementById(inputId);
-      const span = document.getElementById(spanId);
-      input.addEventListener('change', () => span.textContent = input.files[0]?.name || 'No file selected');
-    }
-    updateFileName('f1', 'f1-name');
-    updateFileName('f2', 'f2-name');
-
-    ["fAdded","fRemoved","fChanged","fShowDiffs","search"].forEach(id=>{
-      document.getElementById(id).addEventListener(id==="search"?"input":"change", ()=>{
-        if (!LAST.currentSection) return;
-        renderTableFor(LAST.currentSection);
-      });
-    });
-
-    function openDetail(section, id){
-      const { diffs, headers, renames, hydrographs } = LAST.json || {};
-      const d = diffs?.[section] || { added:{}, removed:{}, changed:{} };
-      const titleEl = document.getElementById('modalTitle');
-      const metaEl = document.getElementById('modalMeta');
-      const grid = document.getElementById('modalGrid');
-      const onlyChangedBox = document.getElementById('onlyChangedBox');
-
-      if (section === "HYDROGRAPHS" && id.includes(" ")) {
-        const [hydro, month] = id.split(" ");
-        titleEl.textContent = `HYDROGRAPH · ${hydro} · ${month}`;
-        grid.innerHTML = "";
-
-        const params = ["R","T","K","Dmax","Drecov","Dinit"];
-        const responses = ["Short","Medium","Long"];
-
-        const h1 = (hydrographs?.file1 || {});
-        const h2 = (hydrographs?.file2 || {});
-        function getVals(dict, resp) {
-          return (dict[`${hydro} ${month} ${resp}`] || ["","","","","",""]).slice(0,6);
-        }
-
-        function fmtNum(x){
-          const v = Number(x);
-          if (!isFinite(v)) return (x && x !== "") ? escapeHtml(x) : "—";
-          const s = v.toLocaleString(undefined, { minimumFractionDigits: 3, maximumFractionDigits: 3 });
-          return s === "-0.000" ? "0.000" : s;
-        }
-
-        function deltaCell(ov, nv){
-          if ((ov ?? "") === (nv ?? "")) return `<span class="num">${fmtNum(nv)}</span>`;
-          const vo = Number(ov), vn = Number(nv);
-          const hasNums = isFinite(vo) && isFinite(vn);
-          const delta = hasNums ? vn - vo : null;
-          const dTxt = hasNums ? ` <span class="plusminus">(${delta >= 0 ? "+" : ""}${fmtNum(delta)})</span>` : "";
-          const oTxt = (ov !== "" && ov !== undefined) ? fmtNum(ov) : "—";
-          const nTxt = (nv !== "" && nv !== undefined) ? fmtNum(nv) : "—";
-          return `<span class="delta"><span class="old">${oTxt}</span><span class="arrow">→</span><span class="diff">${nTxt}</span>${dTxt}</span>`;
-        }
-
-        const tbl = document.createElement("table");
-        tbl.className = "modal-hydro";
-        tbl.innerHTML = `<thead>
-          <tr><th class="resp">Response</th>${params.map(p=>`<th>${p}</th>`).join("")}</tr>
-        </thead><tbody></tbody>`;
-        const tbody = tbl.querySelector("tbody");
-
-        const showOnlyChanged = () => onlyChangedBox.checked;
-
-        for (const resp of responses) {
-          const oldVals = getVals(h1, resp);
-          const newVals = getVals(h2, resp);
-          const rowHasChange = oldVals.some((ov,i)=> (ov||"") !== (newVals[i]||""));
-          if (showOnlyChanged() && !rowHasChange) continue;
-
-          const tr = document.createElement("tr");
-          tr.innerHTML = `<td style="padding:6px 8px;font-weight:600;">${resp}</td>` +
-            params.map((_,i)=>{
-              const ov = oldVals[i] || "";
-              const nv = newVals[i] || "";
-              return `<td>${deltaCell(ov, nv)}</td>`;
-            }).join("");
-          tbody.appendChild(tr);
-        }
-
-        metaEl.innerHTML = `<span class="tag">Hydrograph</span>`;
-        grid.appendChild(tbl);
-        onlyChangedBox.onchange = ()=> openDetail(section, id);
-        document.getElementById('modalBackdrop').style.display = 'flex';
-        return;
-      }
-
-      const hdrsRaw = (headers?.[section] || []).slice();
-      const hdrsLabeled = relabelHeaders(section, hdrsRaw);
-
-      const isAdded   = d.added && Object.prototype.hasOwnProperty.call(d.added, id);
-      const isRemoved = d.removed && Object.prototype.hasOwnProperty.call(d.removed, id);
-      const changeType = isAdded ? 'Added' : isRemoved ? 'Removed' : 'Changed';
-
-      let oldArr = isAdded   ? [] : isRemoved ? (d.removed[id] || []) : (d.changed[id]?.[0] || []);
-      let newArr = isRemoved ? [] : isAdded   ? (d.added[id]   || []) : (d.changed[id]?.[1] || []);
-
-      titleEl.textContent = `${section} · ${id}`;
-      const renameTo = renames?.[section]?.[id];
-      metaEl.innerHTML = `<span class="tag">${changeType}</span>${renameTo ? `<span class="tag" style="margin-left:6px">Renamed ↦ ${renameTo}</span>`:''}`;
-
-      const maxLen = Math.max(oldArr.length, newArr.length) + 1;
-      while (hdrsLabeled.length < maxLen) hdrsLabeled.push(`Field ${hdrsLabeled.length+1}`);
-
-      grid.innerHTML = `
-        <div class="hdr">Field</div>
-        <div class="hdr">Old</div>
-        <div class="hdr">New</div>
-      `;
-      const showOnlyChanged = () => onlyChangedBox.checked;
-      const pushRow = (label, oldV, newV)=>{
-        const changed = (oldV||"") !== (newV||"");
-        if (showOnlyChanged() && !changed) return;
-        const oldCell = changed ? `<span class="cell-changed">${escapeHtml(oldV||"")}</span>` : escapeHtml(oldV||"");
-        const newCell = changed ? `<span class="cell-changed">${escapeHtml(newV||"")}</span>` : escapeHtml(newV||"");
-        grid.insertAdjacentHTML('beforeend', `<div>${escapeHtml(label)}</div><div>${oldCell}</div><div>${newCell}</div>`);
-      };
-      pushRow(hdrsLabeled[0] || "ID", id, id);
-      for (let i=1;i<maxLen;i++) pushRow(hdrsLabeled[i] || `Field ${i}`, oldArr[i-1], newArr[i-1]);
-
-      onlyChangedBox.onchange = ()=> openDetail(section, id);
-      document.getElementById('modalBackdrop').style.display = 'flex';
-    }
-
-    function closeModal(){ document.getElementById('modalBackdrop').style.display='none'; }
-
-    function copyRowJSON(){
-      const section = LAST.currentSection;
-      if (!section) return;
-      const d = LAST.json?.diffs?.[section] || {};
-      const rawTitle = document.getElementById('modalTitle').textContent;
-      const parts = rawTitle.split('·').map(s=>s.trim());
-      const id = parts[parts.length-1];
-
-      let oldArr = [], newArr = [];
-      if (d.added && Object.prototype.hasOwnProperty.call(d.added, id)) {
-        newArr = d.added[id] || [];
-      } else if (d.removed && Object.prototype.hasOwnProperty.call(d.removed, id)) {
-        oldArr = d.removed[id] || [];
-      } else if (d.changed && Object.prototype.hasOwnProperty.call(d.changed, id)) {
-        oldArr = d.changed[id]?.[0] || [];
-        newArr = d.changed[id]?.[1] || [];
-      }
-
-      const entry = {
-        section,
-        id,
-        headers: relabelHeaders(section, (LAST.json?.headers?.[section] || [])),
-        old: oldArr,
-        new: newArr,
-      };
-      navigator.clipboard.writeText(JSON.stringify(entry, null, 2));
-      alert("Row JSON copied.");
-    }
-  </script>
-  
 </body>
+
 </html>

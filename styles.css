@@ -43,7 +43,8 @@ body.resizing-h { cursor: row-resize; user-select: none; }
 .menu-content label { display: block; padding: 8px 12px; }
 
 button { padding:8px 12px; border-radius:8px; border:1px solid #d0d0d0; background:#fff; cursor:pointer; font-size: 14px; }
-button.primary{ background:#fff; color:var(--blue); border-color:#fff; font-weight: 600; }
+button.primary{ background:var(--blue); color:#fff; border-color:var(--blue); font-weight: 600; }
+header button.primary { background:#fff; color:var(--blue); border-color:#fff; }
 
 .dropdown-btn, .file-btn-label {
   padding: 8px 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.5); background: transparent; color: #fff; cursor: pointer;

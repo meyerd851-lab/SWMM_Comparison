@@ -1,12 +1,32 @@
-// app.js - Main application logic (worker communication, initialization, coordination)
+// ==============================================================================
+// APP.JS - MAIN APPLICATION CONTROLLER
+// ==============================================================================
+// This file acts as the "brain" of the frontend application. It coordinates:
+// 1. Initialization (setting up the map, worker, etc.)
+// 2. Worker Communication (sending files to the background thread for processing)
+// 3. Event Handling (responding to button clicks, file uploads)
+// 4. UI Updates (displaying status messages)
+// ==============================================================================
+
 import { state } from './state.js';
 import { renderSections } from './table.js';
 import { drawGeometry } from './map.js';
 import { makeResizable, openHelpModal, closeHelpModal, saveSession, loadSession, exportToExcel, openDetail, closeModal, copyRowJSON, updateFileName, openCompareModal, closeCompareModal, setWorker, setSetStatusCallback } from './ui.js';
 import { setOpenDetailCallback } from './table.js';
 
+// ==============================================================================
+// SECTION 1: INITIALIZATION
+// ==============================================================================
+
 // Initialize proj4 with default CRS
 proj4.defs(state.CURRENT_CRS, state.PROJECTIONS[state.CURRENT_CRS]);
+
+// ==============================================================================
+// SECTION 2: WEB WORKER SETUP
+// ==============================================================================
+// The heavy lifting (parsing and comparing INP files) is done in a separate
+// background thread (Web Worker) to keep the UI responsive.
+// ------------------------------------------------------------------------------
 
 // Worker setup
 const worker = new Worker("worker.js");
@@ -17,6 +37,7 @@ function setStatus(s) {
 }
 setSetStatusCallback(setStatus);
 
+// Handle messages received FROM the worker
 worker.onmessage = (ev) => {
   const { type, payload, error } = ev.data || {};
   if (type === "ready") {
@@ -46,7 +67,14 @@ worker.onmessage = (ev) => {
     }
   }
 };
+// Send initialization message to worker
 worker.postMessage({ type: "init" });
+
+// ==============================================================================
+// SECTION 3: UI EVENT LISTENERS
+// ==============================================================================
+// These listeners handle user interactions like clicking buttons or selecting files.
+// ------------------------------------------------------------------------------
 
 // Set up openDetail callback for table.js
 setOpenDetailCallback(openDetail);
@@ -72,6 +100,7 @@ document.getElementById('runCompareFromModal').addEventListener('click', async (
     "CONDUIT_OFFSET": parseFloat(document.getElementById('tol_conduit_offset').value) || 0,
     "JUNCTION_INVERT": parseFloat(document.getElementById('tol_junction_invert').value) || 0,
     "JUNCTION_DEPTH": parseFloat(document.getElementById('tol_junction_depth').value) || 0,
+    "CONDUIT_ROUGHNESS": parseFloat(document.getElementById('tol_conduit_roughness').value) || 0,
   };
 
   state.FILES.f1Name = f1.name;
@@ -81,7 +110,7 @@ document.getElementById('runCompareFromModal').addEventListener('click', async (
   state.FILES.f1Bytes = b1;
   state.FILES.f2Bytes = b2;
   setStatus("Running comparison…");
-  worker.postMessage({ type: "compare", file1: b1, file2: b2, tolerances: tolerances }, [b1, b2]);
+  worker.postMessage({ type: "compare", file1: b1, file2: b2, tolerances: tolerances });
   closeCompareModal();
 });
 
@@ -102,6 +131,7 @@ document.getElementById('helpBtn').addEventListener('click', openHelpModal);
 // Modal close handlers
 window.closeModal = closeModal;
 window.closeHelpModal = closeHelpModal;
+window.closeCompareModal = closeCompareModal;
 window.copyRowJSON = copyRowJSON;
 
 // Initialize resizable panels

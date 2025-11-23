@@ -1,3 +1,19 @@
+# swmm_headers.py
+# ==============================================================================
+# SWMM INP SECTION HEADERS
+# ==============================================================================
+# This file defines the default column headers for various sections of a SWMM INP file.
+#
+# The SWMM INP format is a text-based format where data is organized into sections
+# (e.g., [JUNCTIONS], [CONDUITS]). Each section has specific columns.
+#
+# This dictionary maps the Section Name (e.g., "JUNCTIONS") to a list of
+# Column Names (e.g., ["Name", "InvertElev", ...]).
+#
+# These headers are used by the parsing logic to label the data fields when
+# converting the text file into a structured object.
+# ==============================================================================
+
 SECTION_HEADERS = {
     # --- Project-level / config sections ------------------------------------
     "TITLE": [],  # free text lines
