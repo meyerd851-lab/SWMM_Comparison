@@ -1365,7 +1365,7 @@ CRS_WKT = {
     "EPSG:2272": 'PROJCS["NAD83 / Pennsylvania South (ftUS)",GEOGCS["NAD83",DATUM["North_American_Datum_1983",SPHEROID["GRS 1980",6378137,298.257222101,AUTHORITY["EPSG","7019"]],AUTHORITY["EPSG","6269"]],PRIMEM["Greenwich",0,AUTHORITY["EPSG","8901"]],UNIT["degree",0.0174532925199433,AUTHORITY["EPSG","9122"]],AUTHORITY["EPSG","4269"]],PROJECTION["Lambert_Conformal_Conic_2SP"],PARAMETER["standard_parallel_1",40.96666666666667],PARAMETER["standard_parallel_2",39.93333333333333],PARAMETER["latitude_of_origin",39.33333333333334],PARAMETER["central_meridian",-77.75],PARAMETER["false_easting",1968500.000000001],PARAMETER["false_northing",0],UNIT["US survey foot",0.3048006096012192,AUTHORITY["EPSG","9003"]],AXIS["X",EAST],AXIS["Y",NORTH],AUTHORITY["EPSG","2272"]]',
 }
 
-def generate_shapefiles_zip(diffs_json_str: str, geometry_json_str: str, crs_id: str = None) -> bytes:
+def generate_shapefiles_zip(diffs_json_str: str, geometry_json_str: str, crs_id: str = None, file_prefix: str = "export") -> bytes:
     """
     Generates a ZIP file containing shapefiles for Nodes, Links, and Subcatchments.
     
@@ -1373,6 +1373,7 @@ def generate_shapefiles_zip(diffs_json_str: str, geometry_json_str: str, crs_id:
         diffs_json_str: JSON string of the diffs object (output of run_compare).
         geometry_json_str: JSON string of the geometry object.
         crs_id: Optional EPSG code (e.g., "EPSG:3735") to include a .prj file.
+        file_prefix: String to append to filenames (e.g., "file1_vs_file2").
         
     Returns:
         bytes: The ZIP file content.
@@ -1505,16 +1506,16 @@ def generate_shapefiles_zip(diffs_json_str: str, geometry_json_str: str, crs_id:
             # Nodes
             node_sections = ["JUNCTIONS", "OUTFALLS", "DIVIDERS", "STORAGE"]
             node_records = collect_records(node_sections)
-            write_shapefile("nodes", shapefile.POINT, node_records, nodes1, nodes2)
+            write_shapefile(f"nodes_{file_prefix}", shapefile.POINT, node_records, nodes1, nodes2)
             
             # Links
             link_sections = ["CONDUITS", "PUMPS", "ORIFICES", "WEIRS", "OUTLETS"]
             link_records = collect_records(link_sections)
-            write_shapefile("links", shapefile.POLYLINE, link_records, links1, links2)
+            write_shapefile(f"links_{file_prefix}", shapefile.POLYLINE, link_records, links1, links2)
             
             # Subcatchments
             sub_records = collect_records(["SUBCATCHMENTS"])
-            write_shapefile("subcatchments", shapefile.POLYGON, sub_records, subs1, subs2)
+            write_shapefile(f"subcatchments_{file_prefix}", shapefile.POLYGON, sub_records, subs1, subs2)
             
         return zip_buffer.getvalue()
     except Exception as e:

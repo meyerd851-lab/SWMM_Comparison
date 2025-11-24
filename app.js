@@ -72,7 +72,11 @@ worker.onmessage = (ev) => {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = "SWMM_Comparison_Shapefiles.zip";
+
+      const f1Name = (document.getElementById('f1-name').textContent || "file1").replace(/\.inp$/i, "").substring(0, 20);
+      const f2Name = (document.getElementById('f2-name').textContent || "file2").replace(/\.inp$/i, "").substring(0, 20);
+      a.download = `SWMM_Shapefiles_${f1Name}_vs_${f2Name}.zip`;
+
       a.click();
       URL.revokeObjectURL(url);
       setStatus("Shapefiles downloaded.");

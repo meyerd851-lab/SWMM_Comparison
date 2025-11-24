@@ -57,9 +57,10 @@ self.onmessage = async (ev) => {
       const diffsJson = msg.diffs;
       const geometryJson = msg.geometry;
       const crs = msg.crs;
+      const filePrefix = msg.filePrefix || "export";
 
       try {
-        const zipBytes = core.generate_shapefiles_zip(diffsJson, geometryJson, crs);
+        const zipBytes = core.generate_shapefiles_zip(diffsJson, geometryJson, crs, filePrefix);
         // Convert PyProxy/bytes to JS Uint8Array
         const jsBytes = zipBytes.toJs();
         zipBytes.destroy();

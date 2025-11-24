@@ -403,12 +403,17 @@ export async function exportToShapefile() {
   if (!state.LAST.json) { alert("Please run a comparison first."); return; }
   setStatus("Requesting Shapefile generation...");
 
+  const f1Name = (document.getElementById('f1-name').textContent || "file1").replace(/\.inp$/i, "").substring(0, 20);
+  const f2Name = (document.getElementById('f2-name').textContent || "file2").replace(/\.inp$/i, "").substring(0, 20);
+  const filePrefix = `${f1Name}_vs_${f2Name}`;
+
   if (workerRef) {
     workerRef.postMessage({
       type: "export_shapefiles",
       diffs: JSON.stringify(state.LAST.json),
       geometry: "{}",
-      crs: state.CURRENT_CRS
+      crs: state.CURRENT_CRS,
+      filePrefix: filePrefix
     });
   }
 }
