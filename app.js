@@ -11,7 +11,7 @@
 import { state } from './state.js';
 import { renderSections } from './table.js';
 import { drawGeometry } from './map.js';
-import { makeResizable, openHelpModal, closeHelpModal, saveSession, loadSession, exportToExcel, openDetail, closeModal, copyRowJSON, updateFileName, openCompareModal, closeCompareModal, setWorker, setSetStatusCallback } from './ui.js';
+import { makeResizable, openHelpModal, closeHelpModal, saveSession, loadSession, exportToExcel, exportToShapefile, openDetail, closeModal, copyRowJSON, updateFileName, openCompareModal, closeCompareModal, setWorker, setSetStatusCallback } from './ui.js';
 import { setOpenDetailCallback } from './table.js';
 
 // ==============================================================================
@@ -64,6 +64,21 @@ worker.onmessage = (ev) => {
       console.error(e);
       setStatus("Failed to parse result.");
       alert("Failed to parse result JSON.");
+    }
+  }
+  if (type === "shapefile_result") {
+    try {
+      const blob = new Blob([payload], { type: "application/zip" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = "SWMM_Comparison_Shapefiles.zip";
+      a.click();
+      URL.revokeObjectURL(url);
+      setStatus("Shapefiles downloaded.");
+    } catch (e) {
+      console.error(e);
+      setStatus("Failed to download shapefiles.");
     }
   }
 };
@@ -124,6 +139,7 @@ document.getElementById('loadSessInput').addEventListener('change', (ev) => {
 
 // Excel export
 document.getElementById('exportXlsx').addEventListener('click', exportToExcel);
+document.getElementById('exportShp').addEventListener('click', exportToShapefile);
 
 // Help button
 document.getElementById('helpBtn').addEventListener('click', openHelpModal);

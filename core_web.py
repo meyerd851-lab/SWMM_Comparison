@@ -23,6 +23,8 @@ import io, re, json, math
 from dataclasses import dataclass, field
 from typing import Dict, List, Tuple, Optional
 from collections import defaultdict
+import zipfile
+import shapefile
 
 # ------------------------------------------------------------------------------
 # SECTION 1: CONSTANTS
@@ -1344,3 +1346,176 @@ def _to_text_io(payload) -> io.StringIO:
         except Exception as e:
             raise TypeError(f"Unsupported input type for INP bytes: {type(payload)!r}") from e
     return io.StringIO(data.decode("utf-8", "ignore"))
+
+
+# ==============================================================================
+# SECTION 8: SHAPEFILE EXPORT
+# ==============================================================================
+# Logic to generate a ZIP file containing Shapefiles for Nodes, Links, and Subcatchments.
+# ------------------------------------------------------------------------------
+
+import zipfile
+import shapefile
+
+# WKT Definitions for supported CRS
+CRS_WKT = {
+    "EPSG:3735": 'PROJCS["NAD83 / Ohio South (ftUS)",GEOGCS["NAD83",DATUM["North_American_Datum_1983",SPHEROID["GRS 1980",6378137,298.257222101,AUTHORITY["EPSG","7019"]],AUTHORITY["EPSG","6269"]],PRIMEM["Greenwich",0,AUTHORITY["EPSG","8901"]],UNIT["degree",0.0174532925199433,AUTHORITY["EPSG","9122"]],AUTHORITY["EPSG","4269"]],PROJECTION["Lambert_Conformal_Conic_2SP"],PARAMETER["standard_parallel_1",40.03333333333333],PARAMETER["standard_parallel_2",38.73333333333333],PARAMETER["latitude_of_origin",38],PARAMETER["central_meridian",-82.5],PARAMETER["false_easting",1968500.000000001],PARAMETER["false_northing",0],UNIT["US survey foot",0.3048006096012192,AUTHORITY["EPSG","9003"]],AXIS["X",EAST],AXIS["Y",NORTH],AUTHORITY["EPSG","3735"]]',
+    "EPSG:3733": 'PROJCS["NAD83 / Ohio North (ftUS)",GEOGCS["NAD83",DATUM["North_American_Datum_1983",SPHEROID["GRS 1980",6378137,298.257222101,AUTHORITY["EPSG","7019"]],AUTHORITY["EPSG","6269"]],PRIMEM["Greenwich",0,AUTHORITY["EPSG","8901"]],UNIT["degree",0.0174532925199433,AUTHORITY["EPSG","9122"]],AUTHORITY["EPSG","4269"]],PROJECTION["Lambert_Conformal_Conic_2SP"],PARAMETER["standard_parallel_1",41.7],PARAMETER["standard_parallel_2",40.43333333333333],PARAMETER["latitude_of_origin",39.66666666666666],PARAMETER["central_meridian",-82.5],PARAMETER["false_easting",1968500.000000001],PARAMETER["false_northing",0],UNIT["US survey foot",0.3048006096012192,AUTHORITY["EPSG","9003"]],AXIS["X",EAST],AXIS["Y",NORTH],AUTHORITY["EPSG","3733"]]',
+    "EPSG:6499": 'PROJCS["NAD83(2011) / Michigan South (ft)",GEOGCS["NAD83(2011)",DATUM["NAD83_National_Spatial_Reference_System_2011",SPHEROID["GRS 1980",6378137,298.257222101,AUTHORITY["EPSG","7019"]],AUTHORITY["EPSG","1116"]],PRIMEM["Greenwich",0,AUTHORITY["EPSG","8901"]],UNIT["degree",0.0174532925199433,AUTHORITY["EPSG","9122"]],AUTHORITY["EPSG","6318"]],PROJECTION["Lambert_Conformal_Conic_2SP"],PARAMETER["standard_parallel_1",43.66666666666666],PARAMETER["standard_parallel_2",42.1],PARAMETER["latitude_of_origin",41.5],PARAMETER["central_meridian",-84.36666666666666],PARAMETER["false_easting",13123359.58005249],PARAMETER["false_northing",0],UNIT["foot",0.3048,AUTHORITY["EPSG","9002"]],AXIS["X",EAST],AXIS["Y",NORTH],AUTHORITY["EPSG","6499"]]',
+    "EPSG:2272": 'PROJCS["NAD83 / Pennsylvania South (ftUS)",GEOGCS["NAD83",DATUM["North_American_Datum_1983",SPHEROID["GRS 1980",6378137,298.257222101,AUTHORITY["EPSG","7019"]],AUTHORITY["EPSG","6269"]],PRIMEM["Greenwich",0,AUTHORITY["EPSG","8901"]],UNIT["degree",0.0174532925199433,AUTHORITY["EPSG","9122"]],AUTHORITY["EPSG","4269"]],PROJECTION["Lambert_Conformal_Conic_2SP"],PARAMETER["standard_parallel_1",40.96666666666667],PARAMETER["standard_parallel_2",39.93333333333333],PARAMETER["latitude_of_origin",39.33333333333334],PARAMETER["central_meridian",-77.75],PARAMETER["false_easting",1968500.000000001],PARAMETER["false_northing",0],UNIT["US survey foot",0.3048006096012192,AUTHORITY["EPSG","9003"]],AXIS["X",EAST],AXIS["Y",NORTH],AUTHORITY["EPSG","2272"]]',
+}
+
+def generate_shapefiles_zip(diffs_json_str: str, geometry_json_str: str, crs_id: str = None) -> bytes:
+    """
+    Generates a ZIP file containing shapefiles for Nodes, Links, and Subcatchments.
+    
+    Args:
+        diffs_json_str: JSON string of the diffs object (output of run_compare).
+        geometry_json_str: JSON string of the geometry object.
+        crs_id: Optional EPSG code (e.g., "EPSG:3735") to include a .prj file.
+        
+    Returns:
+        bytes: The ZIP file content.
+    """
+    try:
+        diffs_full = json.loads(diffs_json_str)
+        # The 'diffs' key inside the full output holds the actual diffs
+        diffs = diffs_full.get("diffs", {}) if "diffs" in diffs_full else diffs_full
+        
+        # If the input was the full output object, extract geometry from it too
+        if "geometry" in diffs_full:
+            geom = diffs_full["geometry"]
+        else:
+            geom = json.loads(geometry_json_str)
+            
+        # Extract geometry
+        nodes1 = geom.get("nodes1", {})
+        nodes2 = geom.get("nodes2", {})
+        links1 = geom.get("links1", {})
+        links2 = geom.get("links2", {})
+        subs1 = geom.get("subs1", {})
+        subs2 = geom.get("subs2", {})
+        
+        # In-memory ZIP buffer
+        zip_buffer = io.BytesIO()
+        
+        with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
+            
+            # Helper to write a shapefile to the ZIP
+            def write_shapefile(name, shape_type, records, coords_lookup1, coords_lookup2):
+                # records: list of (id, status)
+                # coords_lookup1: dict id -> coords (for Removed)
+                # coords_lookup2: dict id -> coords (for Added, Changed, Same)
+                
+                shpio = io.BytesIO()
+                shxio = io.BytesIO()
+                dbfio = io.BytesIO()
+                
+                w = shapefile.Writer(shp=shpio, shx=shxio, dbf=dbfio)
+                w.shapeType = shape_type
+                w.field("ID", "C", 50)
+                w.field("Status", "C", 20)
+                
+                count = 0
+                for eid, status in records:
+                    coords = None
+                    if status == "Removed":
+                        coords = coords_lookup1.get(eid)
+                    else:
+                        coords = coords_lookup2.get(eid)
+                        
+                    if not coords:
+                        continue
+                        
+                    # Add geometry
+                    if shape_type == shapefile.POINT:
+                        # coords is (x, y)
+                        w.point(coords[0], coords[1])
+                    elif shape_type == shapefile.POLYLINE:
+                        # coords is [(x, y), ...]
+                        w.line([coords])
+                    elif shape_type == shapefile.POLYGON:
+                        # coords is [(x, y), ...]
+                        # Ensure closed polygon
+                        if coords[0] != coords[-1]:
+                            coords.append(coords[0])
+                        w.poly([coords])
+                        
+                    w.record(eid, status)
+                    count += 1
+                    
+                w.close()
+                
+                if count > 0:
+                    zf.writestr(f"{name}.shp", shpio.getvalue())
+                    zf.writestr(f"{name}.shx", shxio.getvalue())
+                    zf.writestr(f"{name}.dbf", dbfio.getvalue())
+                    
+                    # Write PRJ file if CRS is provided and known
+                    if crs_id and crs_id in CRS_WKT:
+                        zf.writestr(f"{name}.prj", CRS_WKT[crs_id])
+
+            # --- Prepare Data ---
+            
+            # Re-parsing the full output to get sections lists
+            full_out = diffs_full
+            secs1 = full_out.get("sections1", {})
+            secs2 = full_out.get("sections2", {})
+            
+            def collect_records(section_names):
+                records = []
+                processed_ids = set()
+                
+                for sec in section_names:
+                    s1 = secs1.get(sec, {})
+                    s2 = secs2.get(sec, {})
+                    d = diffs.get(sec, {})
+                    
+                    added = set(d.get("added", {}).keys())
+                    removed = set(d.get("removed", {}).keys())
+                    changed = set(d.get("changed", {}).keys())
+                    
+                    # Added
+                    for eid in added:
+                        if eid not in processed_ids:
+                            records.append((eid, "Added"))
+                            processed_ids.add(eid)
+                            
+                    # Removed
+                    for eid in removed:
+                        if eid not in processed_ids:
+                            records.append((eid, "Removed"))
+                            processed_ids.add(eid)
+                            
+                    # Changed
+                    for eid in changed:
+                        if eid not in processed_ids:
+                            records.append((eid, "Changed"))
+                            processed_ids.add(eid)
+                            
+                    # Same
+                    # IDs in s2 that are not added or changed
+                    for eid in s2:
+                        if eid not in added and eid not in changed and eid not in processed_ids:
+                            records.append((eid, "Same"))
+                            processed_ids.add(eid)
+                            
+                return records
+
+            # Nodes
+            node_sections = ["JUNCTIONS", "OUTFALLS", "DIVIDERS", "STORAGE"]
+            node_records = collect_records(node_sections)
+            write_shapefile("nodes", shapefile.POINT, node_records, nodes1, nodes2)
+            
+            # Links
+            link_sections = ["CONDUITS", "PUMPS", "ORIFICES", "WEIRS", "OUTLETS"]
+            link_records = collect_records(link_sections)
+            write_shapefile("links", shapefile.POLYLINE, link_records, links1, links2)
+            
+            # Subcatchments
+            sub_records = collect_records(["SUBCATCHMENTS"])
+            write_shapefile("subcatchments", shapefile.POLYGON, sub_records, subs1, subs2)
+            
+        return zip_buffer.getvalue()
+    except Exception as e:
+        return str(e).encode("utf-8")

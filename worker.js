@@ -15,6 +15,10 @@ self.onmessage = async (ev) => {
         const src = await (await fetch("./core_web.py", { cache: "no-store" })).text();
         pyodide.FS.writeFile("core_web.py", src);
 
+        self.postMessage({ type: "progress", payload: "Loading shapefile.py…" });
+        const shpSrc = await (await fetch("./shapefile.py", { cache: "no-store" })).text();
+        pyodide.FS.writeFile("shapefile.py", shpSrc);
+
         // Import the module
         core = pyodide.pyimport("core_web");
       }
@@ -42,6 +46,27 @@ self.onmessage = async (ev) => {
         py_b1.destroy();
         py_b2.destroy();
         if (py_tolerances) py_tolerances.destroy();
+      }
+      return;
+    }
+
+    if (msg.type === "export_shapefiles") {
+      if (!pyodide || !core) throw new Error("Pyodide not initialized.");
+      self.postMessage({ type: "progress", payload: "Generating Shapefiles…" });
+
+      const diffsJson = msg.diffs;
+      const geometryJson = msg.geometry;
+      const crs = msg.crs;
+
+      try {
+        const zipBytes = core.generate_shapefiles_zip(diffsJson, geometryJson, crs);
+        // Convert PyProxy/bytes to JS Uint8Array
+        const jsBytes = zipBytes.toJs();
+        zipBytes.destroy();
+
+        self.postMessage({ type: "shapefile_result", payload: jsBytes }, [jsBytes.buffer]);
+      } catch (e) {
+        throw new Error("Shapefile generation failed: " + e.message);
       }
       return;
     }

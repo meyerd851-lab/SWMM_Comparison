@@ -398,6 +398,21 @@ export async function exportToExcel() {
   setStatus("Excel file generated.");
 }
 
+// Shapefile export
+export async function exportToShapefile() {
+  if (!state.LAST.json) { alert("Please run a comparison first."); return; }
+  setStatus("Requesting Shapefile generation...");
+
+  if (workerRef) {
+    workerRef.postMessage({
+      type: "export_shapefiles",
+      diffs: JSON.stringify(state.LAST.json),
+      geometry: "{}",
+      crs: state.CURRENT_CRS
+    });
+  }
+}
+
 // ==============================================================================
 // SECTION 6: DETAIL VIEW
 // ==============================================================================
