@@ -378,7 +378,12 @@ function generatePopupContent(section, id) {
 
   const isAdded = d.added && Object.prototype.hasOwnProperty.call(d.added, id);
   const isRemoved = d.removed && Object.prototype.hasOwnProperty.call(d.removed, id);
-  const changeType = isAdded ? 'Added' : isRemoved ? 'Removed' : 'Changed';
+  const isChanged = d.changed && Object.prototype.hasOwnProperty.call(d.changed, id);
+
+  let changeType = 'Unchanged';
+  if (isAdded) changeType = 'Added';
+  else if (isRemoved) changeType = 'Removed';
+  else if (isChanged) changeType = 'Changed';
 
   const renameTo = renames?.[section]?.[id];
   let html = `<div style="font-weight:bold;font-size:14px;border-bottom:1px solid #eee;padding-bottom:4px;margin-bottom:6px;">${escapeHtml(section)}: ${escapeHtml(id)}</div>`;
@@ -390,8 +395,12 @@ function generatePopupContent(section, id) {
 
   if (changeType === 'Changed') {
     const hdrs = relabelHeaders(section, headers?.[section] || []);
-    const oldArr = d.changed[id]?.[0] || [];
-    const newArr = d.changed[id]?.[1] || [];
+
+    // Handle both array (old style) and object (new style) formats
+    const changedObj = d.changed[id];
+    const oldArr = Array.isArray(changedObj) ? changedObj[0] : (changedObj?.values?.[0] || []);
+    const newArr = Array.isArray(changedObj) ? changedObj[1] : (changedObj?.values?.[1] || []);
+
     const maxLen = Math.max(oldArr.length, newArr.length);
     let changesHtml = '<ul style="margin:0;padding-left:18px;font-size:12px;">';
     let changeCount = 0;
