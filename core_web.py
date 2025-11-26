@@ -633,7 +633,11 @@ def _parse_inp_iter(lines) -> INPParseResult:
         # Generic Section Parsing
         # The first token is usually the Element ID (Name), and the rest are values.
         element_id = tokens[0]
-        values = tokens[1:]
+        if current == "OPTIONS":
+            # For OPTIONS, treat everything after the first token as a single value string
+            values = [" ".join(tokens[1:])]
+        else:
+            values = tokens[1:]
         sections[current][element_id] = values
 
     return INPParseResult(sections, headers, tags, descriptions)
@@ -999,6 +1003,30 @@ def _apply_renames_to_pr2(pr2: INPParseResult,
         if new_id in pr2.tags and old_id not in pr2.tags:
             pr2.tags[old_id] = pr2.tags.pop(new_id)
 
+def _apply_renames_to_geometry(g2: SWMMGeometry,
+                               node_ren: Dict[str, str],
+                               link_ren: Dict[str, str],
+                               sub_ren: Dict[str, str]) -> None:
+    """
+    Updates the geometry object g2 in-place, replacing new IDs with old IDs
+    for any renamed elements. This ensures the frontend can look up geometry
+    using the original ID.
+    """
+    node_new_to_old = {v: k for k, v in node_ren.items()}
+    for new_id, old_id in list(node_new_to_old.items()):
+        if new_id in g2.nodes and old_id not in g2.nodes:
+            g2.nodes[old_id] = g2.nodes.pop(new_id)
+
+    link_new_to_old = {v: k for k, v in link_ren.items()}
+    for new_id, old_id in list(link_new_to_old.items()):
+        if new_id in g2.links and old_id not in g2.links:
+            g2.links[old_id] = g2.links.pop(new_id)
+
+    sub_new_to_old = {v: k for k, v in sub_ren.items()}
+    for new_id, old_id in list(sub_new_to_old.items()):
+        if new_id in g2.subpolys and old_id not in g2.subpolys:
+            g2.subpolys[old_id] = g2.subpolys.pop(new_id)
+
 def spatial_reconcile_and_remap_using_geom(pr1: INPParseResult, pr2: INPParseResult,
                                            g1: SWMMGeometry, g2: SWMMGeometry) -> Dict[str, Dict[str, str]]:
     node_ren = _build_node_renames(pr1, pr2, g1, g2)
@@ -1006,6 +1034,7 @@ def spatial_reconcile_and_remap_using_geom(pr1: INPParseResult, pr2: INPParseRes
     sub_ren  = _build_sub_renames(pr1, pr2, g1, g2)
 
     _apply_renames_to_pr2(pr2, node_ren, link_ren, sub_ren)
+    _apply_renames_to_geometry(g2, node_ren, link_ren, sub_ren)
 
     by_sec = defaultdict(dict)
     for old_id, new_id in node_ren.items():
@@ -1134,7 +1163,7 @@ def _calculate_field_diffs(old_vals: List[str], new_vals: List[str], headers: Li
 
     return diffs
 
-def _filter_changes_by_tolerance(diffs: Dict[str, DiffSection], tolerances: Dict[str, float]):
+def _filter_changes_by_tolerance(diffs: Dict[str, DiffSection], tolerances: Dict[str, float], renames: Dict[str, Dict[str, str]] = None):
     """
     Post-process the 'changed' items in a diffs object, removing any items
     where all numerical differences fall within the specified tolerances.
@@ -1160,6 +1189,10 @@ def _filter_changes_by_tolerance(diffs: Dict[str, DiffSection], tolerances: Dict
     for sec, diff_section in diffs.items():
         ids_to_remove = []
         for item_id, (old_vals, new_vals) in diff_section.changed.items():
+            # Skip filtering if the item was renamed (it's a change regardless of values)
+            if renames and sec in renames and item_id in renames[sec]:
+                continue
+
             max_len = max(len(old_vals), len(new_vals))
             old_padded = old_vals + [""] * (max_len - len(old_vals))
             new_padded = new_vals + [""] * (max_len - len(new_vals))
@@ -1273,9 +1306,34 @@ def run_compare(file1_bytes, file2_bytes, tolerances_py=None) -> str:
     #    Calculate added/removed/changed items.
     diffs, headers = compare_sections(pr1.sections, pr2.sections, pr1.headers, pr2.headers)
 
+    # --- FORCE RENAMED ITEMS INTO "CHANGED" ---
+
+    for sec, mapping in renames.items():
+        if sec not in diffs:
+            diffs[sec] = DiffSection()
+            headers[sec] = pr1.headers.get(sec) or pr2.headers.get(sec, [])
+        
+        for old_id in mapping:
+            if old_id not in diffs[sec].changed:
+                # It was considered "Same" because attributes matched.
+                # Move it to "Changed".
+                v1 = pr1.sections.get(sec, {}).get(old_id, [])
+                v2 = pr2.sections.get(sec, {}).get(old_id, [])
+                diffs[sec].changed[old_id] = (v1, v2)
+
     # 5. Filter by Tolerance
     #    Remove "Changed" items if the difference is within the specified tolerance.
-    _filter_changes_by_tolerance(diffs, tolerances)
+    
+    _filter_changes_by_tolerance(diffs, tolerances, renames)
+
+    # --- INJECT "New Name" COLUMN ---
+    # Add "New Name" column for sections with renames.
+    # Populate with "NA" by default, or the new name if renamed.
+    for sec in diffs:
+        if sec in renames and renames[sec]:
+            # Add header
+            if sec in headers and "New Name" not in headers[sec]:
+                headers[sec].insert(1, "New Name")
 
     # 6. Build Output JSON
     
@@ -1290,19 +1348,49 @@ def run_compare(file1_bytes, file2_bytes, tolerances_py=None) -> str:
     for sec, d in diffs.items():
         s1 = pr1.sections.get(sec, {})
         s2 = pr2.sections.get(sec, {})
+        
+        # Helper to pad values if we added a column
+        has_new_name_col = sec in headers and "New Name" in headers[sec]
+        
+        def get_vals(source, rid, is_file2=False):
+            vals = source.get(rid, []) or []
+            if has_new_name_col:
+                # Pad with "NA" for Added/Removed items
+                vals = list(vals)
+                vals.insert(0, "NA") 
+            return vals
+
+        # Prepare changed items with injected column
+        changed_json = {}
+        for rid in d.changed:
+            old_vals_orig, new_vals_orig = d.changed[rid]
+            
+            # Calculate diffs on ORIGINAL values (before injection)
+            field_diffs = _calculate_field_diffs(old_vals_orig, new_vals_orig, headers.get(sec, []), sec)
+            
+            # Inject "New Name" column
+            if has_new_name_col:
+                new_name_val = renames.get(sec, {}).get(rid, "NA")
+                # Create NEW lists to avoid mutating the originals used elsewhere
+                # User requested NO diff arrow for this column, so set both old and new to the same value
+                v1_disp = [new_name_val] + old_vals_orig
+                v2_disp = [new_name_val] + new_vals_orig
+            else:
+                v1_disp = old_vals_orig
+                v2_disp = new_vals_orig
+                
+            changed_json[rid] = {
+                "values": [v1_disp, v2_disp],
+                "diff_values": field_diffs
+            }
+
         diffs_json[sec] = {
             # ADDED: values from file2
-            "added":   { rid: (s2.get(rid, []) or []) for rid in d.added },
+            "added":   { rid: get_vals(s2, rid, True) for rid in d.added },
             # REMOVED: values from file1
-            "removed": { rid: (s1.get(rid, []) or []) for rid in d.removed },
+            "removed": { rid: get_vals(s1, rid, False) for rid in d.removed },
             # CHANGED: [old, new]
-            "changed": {
-                rid: {
-                    "values": [d.changed[rid][0], d.changed[rid][1]],
-                    "diff_values": _calculate_field_diffs(d.changed[rid][0], d.changed[rid][1], headers.get(sec, []), sec)
-                }
-                for rid in d.changed
-            }
+            "changed": changed_json
         }
 
     # expose full hydrograph maps so the UI can build the 3x6 drill-down like desktop

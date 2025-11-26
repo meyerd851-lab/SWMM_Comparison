@@ -82,13 +82,21 @@ function passChangeFilter(changeType) {
   return document.getElementById(id).checked;
 }
 
+let currentSort = { sec: null, col: 0, dir: 1 }; // dir: 1=asc, -1=desc
+
 export function renderTableFor(sec) {
   const table = document.getElementById('table');
   const { diffs, headers } = state.LAST.json;
   const d = diffs[sec] || { added: {}, removed: {}, changed: {} };
   const q = document.getElementById('search').value.trim().toLowerCase();
 
+  // Reset sort if section changed
+  if (currentSort.sec !== sec) {
+    currentSort = { sec: sec, col: 0, dir: 1 };
+  }
+
   if (sec === "HYDROGRAPHS") {
+
     const rows = groupHydroSummary(d);
     const hdrs = ["Hydrograph", "Month", "ChangeType"];
 
@@ -124,7 +132,7 @@ export function renderTableFor(sec) {
     table.querySelectorAll('tbody tr').forEach((tr) => {
       const hydro = tr.dataset.hydro;
       const month = tr.dataset.month;
-      tr.onclick = () => highlightElement(sec, `${hydro} ${month}`);
+      tr.onclick = () => highlightElement(sec, `${hydro} ${month}`, true);
       tr.ondblclick = () => openDetail("HYDROGRAPHS", `${hydro} ${month}`);
     });
     return;
@@ -156,7 +164,6 @@ export function renderTableFor(sec) {
   for (const [id, arr] of Object.entries(d.removed || {})) if (passChangeFilter('Removed')) push('Removed', id, arr, []);
   for (const [id, changedObj] of Object.entries(d.changed || {})) {
     if (passChangeFilter('Changed')) {
-      // Handle both old format [oldArr, newArr] and new format {values: [oldArr, newArr], diff_values: {...}}
       const oldArr = Array.isArray(changedObj) ? changedObj[0] : (changedObj.values?.[0] || []);
       const newArr = Array.isArray(changedObj) ? changedObj[1] : (changedObj.values?.[1] || []);
       const diffVals = changedObj.diff_values || {};
@@ -164,12 +171,77 @@ export function renderTableFor(sec) {
     }
   }
 
-  const filt = q ? rows.filter(r => (r.id + ' ' + r.type + ' ' + r.oldArr.join(' ') + ' ' + r.newArr.join(' ')).toLowerCase().includes(q)) : rows.sort((a, b) => a.id.localeCompare(b.id));
+  let filt = q ? rows.filter(r => (r.id + ' ' + r.type + ' ' + r.oldArr.join(' ') + ' ' + r.newArr.join(' ')).toLowerCase().includes(q)) : rows;
 
-  let thead = `<thead><tr><th style="width:180px">ElementID</th><th style="width:110px">Change</th>`;
-  for (const h of hdrsLabeled) thead += `<th>${escapeHtml(h)}</th>`;
-  for (const h of diffHeaders) thead += `<th style="background:#eef3ff;">${escapeHtml(h)}</th>`;
+  // --- SORTING LOGIC ---
+  filt.sort((a, b) => {
+    let valA, valB;
+    const col = currentSort.col;
+
+    if (col === 0) { // ElementID
+      valA = a.id;
+      valB = b.id;
+    } else if (col === 1) { // Change Type
+      valA = a.type;
+      valB = b.type;
+    } else if (col >= 2 && col < 2 + hdrsLabeled.length) { // Data Columns
+      const idx = col - 2;
+
+      // Construct full arrays to match rendering (ID + values)
+      const fullOldA = [a.id, ...(a.oldArr || [])];
+      const fullNewA = [a.id, ...(a.newArr || [])];
+      const fullOldB = [b.id, ...(b.oldArr || [])];
+      const fullNewB = [b.id, ...(b.newArr || [])];
+
+      // Use new value for sorting, unless removed then use old
+      valA = a.type === 'Removed' ? fullOldA[idx] : fullNewA[idx];
+      valB = b.type === 'Removed' ? fullOldB[idx] : fullNewB[idx];
+
+      // Handle special calculated Rim Elevation column (last in hdrsLabeled for JUNCTIONS)
+      if (sec === 'JUNCTIONS' && idx === originalHdrsLength) {
+        valA = a.type === 'Removed' ? a.diffs?.RimElevation_old : a.diffs?.RimElevation_new;
+        valB = b.type === 'Removed' ? b.diffs?.RimElevation_old : b.diffs?.RimElevation_new;
+      }
+    } else { // Diff Columns
+      const diffIdx = col - 2 - hdrsLabeled.length;
+      const diffKey = sec === 'CONDUITS' ? ['Length', 'InOffset', 'OutOffset'][diffIdx] :
+        sec === 'JUNCTIONS' ? ['InvertElev', 'MaxDepth'][diffIdx] : null;
+      if (diffKey) {
+        valA = a.diffs?.[diffKey];
+        valB = b.diffs?.[diffKey];
+      }
+    }
+
+    // Simple alphanumeric sort
+    return String(valA ?? "").localeCompare(String(valB ?? ""), undefined, { numeric: true }) * currentSort.dir;
+  });
+
+  // --- HEADER GENERATION ---
+  const makeTh = (label, idx, width) => {
+    const isSorted = currentSort.col === idx;
+    const arrow = isSorted ? (currentSort.dir === 1 ? ' ▲' : ' ▼') : '';
+    const style = width ? `style="width:${width}px; cursor:pointer; user-select:none;"` : `style="cursor:pointer; user-select:none;"`;
+    const bg = idx >= 2 + hdrsLabeled.length ? 'background:#eef3ff;' : '';
+    return `<th ${style} onclick="window.updateTableSort(${idx})">${escapeHtml(label)}${arrow}</th>`.replace('style="', `style="${bg} `);
+  };
+
+  let thead = `<thead><tr>`;
+  thead += makeTh("ElementID", 0, 180);
+  thead += makeTh("Change", 1, 110);
+  hdrsLabeled.forEach((h, i) => thead += makeTh(h, i + 2));
+  diffHeaders.forEach((h, i) => thead += makeTh(h, i + 2 + hdrsLabeled.length));
   thead += `</tr></thead>`;
+
+  // Expose sort function globally so onclick works
+  window.updateTableSort = (colIdx) => {
+    if (currentSort.col === colIdx) {
+      currentSort.dir *= -1;
+    } else {
+      currentSort.col = colIdx;
+      currentSort.dir = 1;
+    }
+    renderTableFor(sec);
+  };
 
   const fmtNum = (n) => {
     if (typeof n !== 'number' || !isFinite(n)) return '—';
@@ -248,7 +320,7 @@ export function renderTableFor(sec) {
 
   table.querySelectorAll('tbody tr').forEach((tr) => {
     const id = tr.children[0]?.textContent || "";
-    tr.onclick = () => highlightElement(sec, id);
+    tr.onclick = () => highlightElement(sec, id, true);
     tr.classList.add(`row-id-${id.replace(/[^a-zA-Z0-9]/g, '_')}`);
     tr.addEventListener('highlight', () => tr.scrollIntoView({ behavior: 'smooth', block: 'center' }));
     tr.ondblclick = () => openDetail(sec, id);

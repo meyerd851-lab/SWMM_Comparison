@@ -327,7 +327,7 @@ export function drawGeometry(json) {
 
 // --- HIGHLIGHTING ---
 
-export function highlightElement(section, id) {
+export function highlightElement(section, id, shouldZoom = false) {
   layers.select.clearLayers();
 
   // Highlight table row
@@ -348,12 +348,15 @@ export function highlightElement(section, id) {
   if (t === 'nodes') {
     const ll = xyToLatLng(geo[0], geo[1]);
     L.circleMarker(ll, { radius: 10, color: C.select, weight: 4, fill: false, opacity: .95 }).addTo(layers.select);
+    if (shouldZoom) map.flyTo(ll, 18, { duration: 0.5 });
   } else if (t === 'links') {
     const ll = geo.map(p => xyToLatLng(p[0], p[1]));
     L.polyline(ll, { color: C.select, weight: 8, opacity: .8 }).addTo(layers.select);
+    if (shouldZoom) map.fitBounds(L.latLngBounds(ll), { padding: [50, 50], maxZoom: 18 });
   } else if (t === 'subs') {
     const ll = geo.map(p => xyToLatLng(p[0], p[1]));
     L.polygon(ll, { color: C.select, weight: 5, fill: false, opacity: .95 }).addTo(layers.select);
+    if (shouldZoom) map.fitBounds(L.latLngBounds(ll), { padding: [50, 50], maxZoom: 18 });
   }
 }
 

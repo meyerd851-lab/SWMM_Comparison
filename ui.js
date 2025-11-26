@@ -322,15 +322,25 @@ export async function exportToExcel() {
       });
     } else {
       hdrs = relabelHeaders(sec, hdrs);
-      sheetData.push(["Element ID", "Change", ...hdrs]);
+
+      // Inject Diff Headers
+      const diffHeaders = [];
+      if (sec === 'CONDUITS') {
+        diffHeaders.push('Δ Length', 'Δ InOffset', 'Δ OutOffset');
+      } else if (sec === 'JUNCTIONS') {
+        diffHeaders.push('Δ InvertElev', 'Δ MaxDepth');
+      }
+
+      sheetData.push(["Element ID", "Change", ...hdrs, ...diffHeaders]);
 
       const rows = [];
-      for (const [id, arr] of Object.entries(d.added || {})) rows.push({ type: 'Added', id, oldArr: [], newArr: arr });
-      for (const [id, arr] of Object.entries(d.removed || {})) rows.push({ type: 'Removed', id, oldArr: arr, newArr: [] });
+      for (const [id, arr] of Object.entries(d.added || {})) rows.push({ type: 'Added', id, oldArr: [], newArr: arr, diffs: {} });
+      for (const [id, arr] of Object.entries(d.removed || {})) rows.push({ type: 'Removed', id, oldArr: arr, newArr: [], diffs: {} });
       for (const [id, pair] of Object.entries(d.changed || {})) {
         const oldArr = Array.isArray(pair) ? pair[0] : (pair.values?.[0] || []);
         const newArr = Array.isArray(pair) ? pair[1] : (pair.values?.[1] || []);
-        rows.push({ type: 'Changed', id, oldArr, newArr });
+        const diffVals = pair.diff_values || {};
+        rows.push({ type: 'Changed', id, oldArr, newArr, diffs: diffVals });
       }
       rows.sort((a, b) => a.id.localeCompare(b.id));
 
@@ -347,6 +357,17 @@ export async function exportToExcel() {
           else if (r.type === 'Removed') row.push(ov);
           else row.push(ov === nv ? nv : `${ov} -> ${nv}`);
         }
+
+        // Append Diff Values
+        if (sec === 'CONDUITS') {
+          row.push(r.diffs?.Length ?? "");
+          row.push(r.diffs?.InOffset ?? "");
+          row.push(r.diffs?.OutOffset ?? "");
+        } else if (sec === 'JUNCTIONS') {
+          row.push(r.diffs?.InvertElev ?? "");
+          row.push(r.diffs?.MaxDepth ?? "");
+        }
+
         sheetData.push(row);
       });
     }
