@@ -1101,7 +1101,7 @@ def compare_sections(secs1: Dict[str, Dict[str, List[str]]],
         added = sorted(keys2 - keys1)
         removed = sorted(keys1 - keys2)
         
-        # Identify Changed items (same ID, different values)
+        # Identify Changed items (Unchanged ID, different values)
         changed = {k: (recs1[k], recs2[k]) for k in (keys1 & keys2) if recs1.get(k) != recs2.get(k)}
 
         if added or removed or changed:
@@ -1315,7 +1315,7 @@ def run_compare(file1_bytes, file2_bytes, tolerances_py=None) -> str:
         
         for old_id in mapping:
             if old_id not in diffs[sec].changed:
-                # It was considered "Same" because attributes matched.
+                # It was considered "Unchanged" because attributes matched.
                 # Move it to "Changed".
                 v1 = pr1.sections.get(sec, {}).get(old_id, [])
                 v2 = pr2.sections.get(sec, {}).get(old_id, [])
@@ -1372,7 +1372,7 @@ def run_compare(file1_bytes, file2_bytes, tolerances_py=None) -> str:
             if has_new_name_col:
                 new_name_val = renames.get(sec, {}).get(rid, "NA")
                 # Create NEW lists to avoid mutating the originals used elsewhere
-                # User requested NO diff arrow for this column, so set both old and new to the same value
+                # User requested NO diff arrow for this column, so set both old and new to the Unchanged value
                 v1_disp = [new_name_val] + old_vals_orig
                 v2_disp = [new_name_val] + new_vals_orig
             else:
@@ -1490,11 +1490,97 @@ def generate_shapefiles_zip(diffs_json_str: str, geometry_json_str: str, crs_id:
         
         with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
             
+            # Helper to sanitize field names for DBF (max 10 chars, unique)
+            def get_dbf_fields(section_names, records):
+                """
+                Returns a list of (dbf_field_name, original_header_name, field_type, field_len, field_dec)
+                """
+                fields_map = {} # original_header -> dbf_name
+                dbf_fields = []
+                
+                seen_dbf_names = set(["ID", "Status"])
+                
+                # 1. Standard Fields (Old and New)
+                for sec in section_names:
+                    headers = SECTION_HEADERS.get(sec, [])
+                    val_headers = headers[1:] if headers else []
+                    
+                    for h in val_headers:
+                        if h in fields_map:
+                            continue
+                            
+                        # Sanitize
+                        safe_h = re.sub(r'[^a-zA-Z0-9]', '', h)
+                        
+                        # We need 2 chars for suffix (_1, _2), so 8 chars max for base
+                        base_candidate = safe_h[:8]
+                        
+                        # Ensure uniqueness of base candidate
+                        # (Actually we need uniqueness of the final fields, but let's just make the base unique first)
+                        # Simpler approach: Generate candidate_O and candidate_N and ensure THEY are unique
+                        
+                        # OLD Field
+                        cand_o = base_candidate + "_1"
+                        suffix = 1
+                        orig_cand_o = cand_o
+                        while cand_o in seen_dbf_names:
+                            suffix_str = str(suffix)
+                            cand_o = orig_cand_o[:10-len(suffix_str)] + suffix_str
+                            suffix += 1
+                        seen_dbf_names.add(cand_o)
+                        dbf_fields.append((cand_o, f"OLD:{h}", "C", 100, 0))
+                        
+                        # NEW Field
+                        # Try to match the base name of OLD if possible, but prioritize uniqueness
+                        cand_n = base_candidate + "_2"
+                        suffix = 1
+                        orig_cand_n = cand_n
+                        while cand_n in seen_dbf_names:
+                            suffix_str = str(suffix)
+                            cand_n = orig_cand_n[:10-len(suffix_str)] + suffix_str
+                            suffix += 1
+                        seen_dbf_names.add(cand_n)
+                        dbf_fields.append((cand_n, f"NEW:{h}", "C", 100, 0))
+                        
+                        fields_map[h] = base_candidate # Just tracking we processed this header
+
+                # 2. Difference Fields
+                # Scan records for any diff_values
+                diff_keys = set()
+                for _, _, _, _, _, diff_map in records:
+                    if diff_map:
+                        diff_keys.update(diff_map.keys())
+                
+                for h in sorted(diff_keys):
+                    # Create a diff field name, e.g. "Length_D"
+                    # Sanitize
+                    safe_h = re.sub(r'[^a-zA-Z0-9]', '', h)
+                    # We want to append _D, so we have 8 chars left
+                    candidate = safe_h[:8] + "_D"
+                    
+                    # Ensure uniqueness
+                    original_candidate = candidate
+                    suffix = 1
+                    while candidate in seen_dbf_names:
+                        suffix_str = str(suffix)
+                        # Truncate further to fit suffix
+                        base_len = 10 - len(suffix_str)
+                        candidate = original_candidate[:base_len] + suffix_str
+                        suffix += 1
+                        
+                    seen_dbf_names.add(candidate)
+                    # Store mapping for diff field: Key is "DIFF:FieldName" to distinguish from regular fields
+                    fields_map[f"DIFF:{h}"] = candidate
+                    dbf_fields.append((candidate, f"DIFF:{h}", "N", 18, 5)) # Numeric for diffs
+                        
+                return dbf_fields
+
             # Helper to write a shapefile to the ZIP
-            def write_shapefile(name, shape_type, records, coords_lookup1, coords_lookup2):
-                # records: list of (id, status)
+            def write_shapefile(name, shape_type, records, coords_lookup1, coords_lookup2, dbf_fields):
+                # records: list of (id, status, section, old_values, new_values, diff_map)
                 # coords_lookup1: dict id -> coords (for Removed)
-                # coords_lookup2: dict id -> coords (for Added, Changed, Same)
+                # coords_lookup2: dict id -> coords (for Added, Changed, Unchanged)
+                # dbf_fields: list of (dbf_name, orig_header, type, len, dec)
                 
                 shpio = io.BytesIO()
                 shxio = io.BytesIO()
@@ -1505,8 +1591,14 @@ def generate_shapefiles_zip(diffs_json_str: str, geometry_json_str: str, crs_id:
                 w.field("ID", "C", 50)
                 w.field("Status", "C", 20)
                 
+                # Add dynamic fields
+                header_to_dbf_idx = {} # orig_header -> index in w.fields (offset by 2 for ID, Status)
+                for i, (dbf_name, orig_header, ftype, flen, fdec) in enumerate(dbf_fields):
+                    w.field(dbf_name, ftype, flen, fdec)
+                    header_to_dbf_idx[orig_header] = i
+                
                 count = 0
-                for eid, status in records:
+                for eid, status, section, old_values, new_values, diff_map in records:
                     coords = None
                     if status == "Removed":
                         coords = coords_lookup1.get(eid)
@@ -1529,8 +1621,47 @@ def generate_shapefiles_zip(diffs_json_str: str, geometry_json_str: str, crs_id:
                         if coords[0] != coords[-1]:
                             coords.append(coords[0])
                         w.poly([coords])
+                    
+                    # Prepare record values
+                    # Initialize with empty strings/zeros
+                    rec_vals = []
+                    for _, _, ftype, _, _ in dbf_fields:
+                        if ftype == "N":
+                            rec_vals.append(0)
+                        else:
+                            rec_vals.append("")
+                    
+                    # 1. Map Standard Values (Old and New)
+                    headers = SECTION_HEADERS.get(section, [])
+                    val_headers = headers[1:] if headers else []
+                    
+                    # Old Values
+                    for i, val in enumerate(old_values):
+                        if i < len(val_headers):
+                            h = val_headers[i]
+                            lookup_key = f"OLD:{h}"
+                            if lookup_key in header_to_dbf_idx:
+                                idx = header_to_dbf_idx[lookup_key]
+                                rec_vals[idx] = str(val)
+
+                    # New Values
+                    for i, val in enumerate(new_values):
+                        if i < len(val_headers):
+                            h = val_headers[i]
+                            lookup_key = f"NEW:{h}"
+                            if lookup_key in header_to_dbf_idx:
+                                idx = header_to_dbf_idx[lookup_key]
+                                rec_vals[idx] = str(val)
+
+                    # 2. Map Difference Values
+                    if diff_map:
+                        for k, v in diff_map.items():
+                            lookup_key = f"DIFF:{k}"
+                            if lookup_key in header_to_dbf_idx:
+                                idx = header_to_dbf_idx[lookup_key]
+                                rec_vals[idx] = v
                         
-                    w.record(eid, status)
+                    w.record(eid, status, *rec_vals)
                     count += 1
                     
                 w.close()
@@ -1564,29 +1695,46 @@ def generate_shapefiles_zip(diffs_json_str: str, geometry_json_str: str, crs_id:
                     removed = set(d.get("removed", {}).keys())
                     changed = set(d.get("changed", {}).keys())
                     
+                    # Helper to get values (excluding ID)
+                    def get_v(source, eid):
+                        v = source.get(eid, [])
+                        return v
+
                     # Added
                     for eid in added:
                         if eid not in processed_ids:
-                            records.append((eid, "Added"))
+                            # Old: [], New: File2
+                            records.append((eid, "Added", sec, [], get_v(s2, eid), {}))
                             processed_ids.add(eid)
                             
                     # Removed
                     for eid in removed:
                         if eid not in processed_ids:
-                            records.append((eid, "Removed"))
+                            # Old: File1, New: []
+                            records.append((eid, "Removed", sec, get_v(s1, eid), [], {}))
                             processed_ids.add(eid)
                             
                     # Changed
                     for eid in changed:
                         if eid not in processed_ids:
-                            records.append((eid, "Changed"))
+                            # Old: File1, New: File2
+                            # Extract diff_values if available
+                            diff_data = d.get("changed", {}).get(eid, {})
+                            
+                            diff_map = {}
+                            if isinstance(diff_data, dict) and "diff_values" in diff_data:
+                                diff_map = diff_data["diff_values"]
+                                
+                            records.append((eid, "Changed", sec, get_v(s1, eid), get_v(s2, eid), diff_map))
                             processed_ids.add(eid)
                             
-                    # Same
+                    # Unchanged
                     # IDs in s2 that are not added or changed
                     for eid in s2:
                         if eid not in added and eid not in changed and eid not in processed_ids:
-                            records.append((eid, "Same"))
+                            # Old: File2 (Unchanged), New: File2
+                            v = get_v(s2, eid)
+                            records.append((eid, "Unchanged", sec, v, v, {}))
                             processed_ids.add(eid)
                             
                 return records
@@ -1594,17 +1742,28 @@ def generate_shapefiles_zip(diffs_json_str: str, geometry_json_str: str, crs_id:
             # Nodes
             node_sections = ["JUNCTIONS", "OUTFALLS", "DIVIDERS", "STORAGE"]
             node_records = collect_records(node_sections)
-            write_shapefile(f"nodes_{file_prefix}", shapefile.POINT, node_records, nodes1, nodes2)
+            node_fields = get_dbf_fields(node_sections, node_records)
+            write_shapefile(f"nodes_{file_prefix}", shapefile.POINT, node_records, nodes1, nodes2, node_fields)
             
             # Links
             link_sections = ["CONDUITS", "PUMPS", "ORIFICES", "WEIRS", "OUTLETS"]
             link_records = collect_records(link_sections)
-            write_shapefile(f"links_{file_prefix}", shapefile.POLYLINE, link_records, links1, links2)
+            link_fields = get_dbf_fields(link_sections, link_records)
+            write_shapefile(f"links_{file_prefix}", shapefile.POLYLINE, link_records, links1, links2, link_fields)
             
             # Subcatchments
-            sub_records = collect_records(["SUBCATCHMENTS"])
-            write_shapefile(f"subcatchments_{file_prefix}", shapefile.POLYGON, sub_records, subs1, subs2)
+            sub_sections = ["SUBCATCHMENTS"]
+            sub_records = collect_records(sub_sections)
+            sub_fields = get_dbf_fields(sub_sections, sub_records)
+            write_shapefile(f"subs_{file_prefix}", shapefile.POLYGON, sub_records, subs1, subs2, sub_fields)
             
-        return zip_buffer.getvalue()
     except Exception as e:
-        return str(e).encode("utf-8")
+        print(f"Error generating shapefiles: {e}")
+        # Return empty bytes or re-raise? 
+        # For now, return empty to avoid crashing the worker completely, but logging is key.
+        import traceback
+        traceback.print_exc()
+        return b""
+        
+    zip_buffer.seek(0)
+    return zip_buffer.read()
