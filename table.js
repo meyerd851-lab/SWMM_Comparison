@@ -220,10 +220,15 @@ export function renderTableFor(sec) {
   const makeTh = (label, idx, width) => {
     const isSorted = currentSort.col === idx;
     const arrow = isSorted ? (currentSort.dir === 1 ? ' ▲' : ' ▼') : '';
-    const style = width ? `style="width:${width}px; cursor:pointer; user-select:none;"` : `style="cursor:pointer; user-select:none;"`;
-    const bg = idx >= 2 + hdrsLabeled.length ? 'background:#eef3ff;' : '';
-    return `<th ${style} onclick="window.updateTableSort(${idx})">${escapeHtml(label)}${arrow}</th>`.replace('style="', `style="${bg} `);
+    const styleParts = [];
+
+    if (width) styleParts.push(`width:${width}px`);
+    styleParts.push('cursor:pointer', 'user-select:none');
+
+    const style = `style="${styleParts.join(';')}"`;
+    return `<th ${style} onclick="window.updateTableSort(${idx})">${escapeHtml(label)}${arrow}</th>`;
   };
+
 
   let thead = `<thead><tr>`;
   thead += makeTh("ElementID", 0, 180);
