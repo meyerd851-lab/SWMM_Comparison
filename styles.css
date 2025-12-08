@@ -705,7 +705,7 @@ header button.primary {
   display: grid;
   grid-template-columns: 200px 1fr 1fr;
   gap: 6px;
-  align-items: start;
+  /* align-items: start; */
 }
 
 .kv div {
@@ -869,4 +869,15 @@ button#runCompareFromModal.primary:hover {
 
 #helpModal .body li {
   margin-bottom: 10px;
+}
+
+/* Multiline text cell (for Controls/Rules) */
+.cell-multiline {
+  white-space: pre-wrap;
+  font-family: Consolas, Monaco, 'Courier New', monospace;
+  font-size: 12px;
+  line-height: 1.4;
+  min-width: 300px;
+  max-width: 600px;
+  overflow-x: auto;
 }

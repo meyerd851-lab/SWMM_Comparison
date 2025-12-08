@@ -544,6 +544,7 @@ def _parse_inp_iter(lines) -> INPParseResult:
     descriptions: Dict[str, str] = {}
 
     current = None  # The current section being parsed (e.g., "JUNCTIONS")
+    current_control_rule = None
     after_header = False # Flag to track if we are immediately after a section header
 
     for raw in lines:
@@ -555,6 +556,7 @@ def _parse_inp_iter(lines) -> INPParseResult:
         m = re.match(r"^\s*\[([^\]]+)\]\s*$", line)
         if m:
             current = m.group(1).upper()
+            current_control_rule = None
             # Initialize headers for this section using defaults if available
             headers.setdefault(current, SECTION_HEADERS.get(current, []).copy())
             descriptions.setdefault(current, "")
@@ -562,6 +564,27 @@ def _parse_inp_iter(lines) -> INPParseResult:
             continue
 
         if current is None:
+            continue
+
+        # Special Handling for [CONTROLS]: Treat Rules as blocks
+        if current == "CONTROLS":
+            # If we hit a new RULE line, switch current_control_rule
+            # Use lstrip() to check start so indentation doesn't break detection
+            if line.lstrip().upper().startswith("RULE "):
+                parts = line.strip().split(maxsplit=1)
+                if len(parts) >= 2:
+                    current_control_rule = parts[1]
+                    sections[current][current_control_rule] = [line]
+                else:
+                    # Fallback for malformed rule line
+                    current_control_rule = f"RULE_{len(sections[current])}"
+                    sections[current][current_control_rule] = [line]
+            elif current_control_rule:
+                # Append line to the current rule's text
+                sections[current][current_control_rule][0] += "\n" + line
+            
+            # If we are in CONTROLS, we consume every line (including empty ones and comments)
+            # once a rule has started. If no rule started, we ignore (likely pre-header comments).
             continue
 
         # 2. Capture Description Comments
@@ -639,6 +662,12 @@ def _parse_inp_iter(lines) -> INPParseResult:
         else:
             values = tokens[1:]
         sections[current][element_id] = values
+
+    # Post-process CONTROLS to strip trailing whitespace from rule text
+    if "CONTROLS" in sections:
+        for rule_id in sections["CONTROLS"]:
+            raw_text = sections["CONTROLS"][rule_id][0]
+            sections["CONTROLS"][rule_id][0] = raw_text.strip()
 
     return INPParseResult(sections, headers, tags, descriptions)
 

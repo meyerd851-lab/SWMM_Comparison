@@ -526,8 +526,18 @@ export function openDetail(section, id) {
   const isRemoved = d.removed && Object.prototype.hasOwnProperty.call(d.removed, id);
   const changeType = isAdded ? 'Added' : isRemoved ? 'Removed' : 'Changed';
 
-  let oldArr = isAdded ? [] : isRemoved ? (d.removed[id] || []) : (d.changed[id]?.[0] || []);
-  let newArr = isRemoved ? [] : isAdded ? (d.added[id] || []) : (d.changed[id]?.[1] || []);
+  let oldArr, newArr;
+  if (isAdded) {
+    oldArr = [];
+    newArr = d.added[id] || [];
+  } else if (isRemoved) {
+    oldArr = d.removed[id] || [];
+    newArr = [];
+  } else {
+    const changedObj = d.changed[id];
+    oldArr = Array.isArray(changedObj) ? changedObj[0] : (changedObj?.values?.[0] || []);
+    newArr = Array.isArray(changedObj) ? changedObj[1] : (changedObj?.values?.[1] || []);
+  }
 
   titleEl.textContent = `${section} · ${id}`;
   const renameTo = renames?.[section]?.[id];
@@ -549,7 +559,11 @@ export function openDetail(section, id) {
     const newCell = changed ? `<span class="cell-changed">${escapeHtml(newV || "")}</span>` : escapeHtml(newV || "");
     grid.insertAdjacentHTML('beforeend', `<div>${escapeHtml(label)}</div><div>${oldCell}</div><div>${newCell}</div>`);
   };
-  pushRow(hdrsLabeled[0] || "ID", id, id);
+
+  const idOld = isAdded ? "" : id;
+  const idNew = isRemoved ? "" : id;
+  pushRow(hdrsLabeled[0] || "ID", idOld, idNew);
+
   for (let i = 1; i < maxLen; i++) pushRow(hdrsLabeled[i] || `Field ${i}`, oldArr[i - 1], newArr[i - 1]);
 
   onlyChangedBox.onchange = () => openDetail(section, id);
