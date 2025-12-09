@@ -147,15 +147,15 @@ export async function saveSession() {
 
   const f1Name = state.FILES.f1Name || "file1";
   const f2Name = state.FILES.f2Name || "file2";
-  const defaultName = `Comparison_Session_${f1Name}_vs_${f2Name}.json`;
+  const defaultName = `${f1Name}_vs_${f2Name}.sca`;
 
   if (window.showSaveFilePicker) {
     try {
       const handle = await window.showSaveFilePicker({
         suggestedName: defaultName,
         types: [{
-          description: 'INP Diff Session',
-          accept: { 'application/json': ['.json'] }
+          description: 'SWMM Comparison Session',
+          accept: { 'application/json': ['.sca'] }
         }]
       });
       const writable = await handle.createWritable();
