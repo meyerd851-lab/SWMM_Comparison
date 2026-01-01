@@ -8,8 +8,9 @@
 :root {
   /* Brand & accent */
   --accent: #cdd2d6;
-  /* main highlight */
+  /* Default (dark mode) accent */
   --accent-soft: rgba(77, 171, 247, 0.25);
+  --accent-soft-hover: rgba(77, 171, 247, 0.2);
 
   /* Status colors */
   --added: #66bb6a;
@@ -17,27 +18,94 @@
   --changed: #ffa726;
   --muted: #9e9e9e;
 
+  --added-bg: rgba(102, 187, 106, 0.16);
+  --removed-bg: rgba(239, 83, 80, 0.16);
+  --changed-bg: rgba(255, 167, 38, 0.16);
+
+  --added-border: rgba(129, 199, 132, 0.7);
+  --removed-border: rgba(239, 154, 154, 0.7);
+  --changed-border: rgba(255, 183, 77, 0.7);
+
   /* Surfaces (dark theme stack) */
   --bg-root: #121212;
+  --bg-gradient: radial-gradient(circle at top left, #202020 0, #050505 55%, #000 100%);
   --bg-elev-1: #181818;
   --bg-elev-2: #1e1e1e;
   --bg-elev-3: #252525;
   --bg-header: rgba(20, 20, 20, 0.9);
+  --bg-shading-even: #191919;
+  --bg-shading-hover: #222222;
 
   /* Text */
   --text-strong: #f5f5f5;
   --text-normal: #e0e0e0;
   --text-subtle: #b0b0b0;
+  --text-inverse: #000000;
+  /* Text on accent color */
 
   /* Borders & outlines */
   --border-soft: #333333;
   --border-strong: #444444;
+  --border-glass: rgba(255, 255, 255, 0.04);
 
   /* Radii / shadows */
   --radius-panel: 12px;
   --radius-pill: 999px;
   --shadow-soft: 0 0 18px rgba(0, 0, 0, 0.55);
   --shadow-hard: 0 0 30px rgba(0, 0, 0, 0.75);
+
+  /* Map */
+  --map-bg: #000;
+}
+
+[data-theme="light"] {
+  /* Brand & accent */
+  --accent: #727cf5;
+  /* A pleasant bluish-purple for light mode */
+  --accent-soft: rgba(114, 124, 245, 0.15);
+  --accent-soft-hover: rgba(114, 124, 245, 0.1);
+
+  /* Status colors - slightly darker for contrast on white */
+  --added: #2e7d32;
+  --removed: #c62828;
+  --changed: #ef6c00;
+  --muted: #757575;
+
+  --added-bg: rgba(46, 125, 50, 0.1);
+  --removed-bg: rgba(198, 40, 40, 0.1);
+  --changed-bg: rgba(239, 108, 0, 0.1);
+
+  --added-border: rgba(46, 125, 50, 0.3);
+  --removed-border: rgba(198, 40, 40, 0.3);
+  --changed-border: rgba(239, 108, 0, 0.3);
+
+  /* Surfaces (light theme stack) */
+  --bg-root: #f8f9fa;
+  --bg-gradient: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+  --bg-elev-1: #ffffff;
+  --bg-elev-2: #ffffff;
+  --bg-elev-3: #f1f3f5;
+  --bg-header: rgba(255, 255, 255, 0.9);
+  --bg-shading-even: #f8f9fa;
+  --bg-shading-hover: #e9ecef;
+
+  /* Text */
+  --text-strong: #212529;
+  --text-normal: #343a40;
+  --text-subtle: #6c757d;
+  --text-inverse: #ffffff;
+
+  /* Borders & outlines */
+  --border-soft: #dee2e6;
+  --border-strong: #ced4da;
+  --border-glass: rgba(0, 0, 0, 0.05);
+
+  /* Radii / shadows */
+  --shadow-soft: 0 2px 8px rgba(0, 0, 0, 0.05);
+  --shadow-hard: 0 5px 15px rgba(0, 0, 0, 0.1);
+
+  /* Map */
+  --map-bg: #e9ecef;
 }
 
 /* ========================================================================
@@ -58,7 +126,7 @@ body {
   font-family: Segoe UI, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
   font-size: 14px;
   color: var(--text-normal);
-  background: radial-gradient(circle at top left, #202020 0, #050505 55%, #000 100%);
+  background: var(--bg-gradient);
   letter-spacing: 0.1px;
 }
 
@@ -76,8 +144,8 @@ header {
   height: 50px;
   background: var(--bg-header);
   color: var(--text-strong);
-  border-bottom: 1px solid rgba(0, 0, 0, 0.7);
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.8);
+  border-bottom: 1px solid var(--border-soft);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.2);
   backdrop-filter: blur(14px);
 }
 
@@ -125,7 +193,7 @@ header img {
 
 /* Splitter bars between panels */
 .splitter {
-  background: #202020;
+  background: var(--bg-elev-3);
 }
 
 .v-splitter {
@@ -172,7 +240,7 @@ body.resizing-h {
 .panel {
   border-radius: var(--radius-panel);
   background: var(--bg-elev-2);
-  border: 1px solid rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border-glass);
   box-shadow: var(--shadow-soft);
   padding: 10px;
   min-height: 0;
@@ -251,8 +319,8 @@ body.resizing-h {
 }
 
 .menu-btn:hover {
-  background-color: rgba(255, 255, 255, 0.04);
-  border-color: rgba(255, 255, 255, 0.08);
+  background-color: var(--border-glass);
+  border-color: var(--border-soft);
   color: var(--accent);
 }
 
@@ -289,7 +357,7 @@ body.resizing-h {
 }
 
 .menu-item:hover {
-  background-color: rgba(77, 171, 247, 0.2);
+  background-color: var(--accent-soft-hover);
   color: var(--accent);
 }
 
@@ -319,15 +387,15 @@ button {
 }
 
 button:hover {
-  background: rgba(255, 255, 255, 0.06);
-  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.03);
+  background: var(--border-glass);
+  box-shadow: 0 0 0 1px var(--border-glass);
   transform: translateY(-0.5px);
 }
 
 /* Primary CTA (Run Comparison) */
 button.primary {
   background: var(--accent);
-  color: #000;
+  color: var(--text-inverse);
   border-color: var(--accent);
   font-weight: 600;
 
@@ -340,7 +408,7 @@ button.primary:hover {
 /* Header-specific primaries, if any */
 header button.primary {
   background: var(--accent);
-  color: #000;
+  color: var(--text-inverse);
 }
 
 /* Dropdown-like buttons and file labels */
@@ -348,7 +416,7 @@ header button.primary {
 .file-btn-label {
   padding: 8px 12px;
   border-radius: var(--radius-pill);
-  border: 1px solid rgba(255, 255, 255, 0.3);
+  border: 1px solid var(--border-strong);
   background: transparent;
   color: var(--text-strong);
   cursor: pointer;
@@ -366,7 +434,7 @@ header button.primary {
 
 .dropdown-btn:hover,
 .file-btn-label:hover {
-  background-color: rgba(255, 255, 255, 0.08);
+  background-color: var(--border-glass);
 }
 
 /* Filters row above table */
@@ -394,12 +462,12 @@ header button.primary {
 }
 
 #search::placeholder {
-  color: rgba(255, 255, 255, 0.35);
+  color: var(--text-subtle);
 }
 
 /* Status text in header bar */
 #status {
-  color: rgba(255, 255, 255, 0.85);
+  color: var(--text-normal);
   font-size: 13px;
 }
 
@@ -426,11 +494,11 @@ header button.primary {
 /* Header row */
 #table th {
   background: var(--bg-elev-3);
-  color: #c0c0c0;
+  color: var(--text-subtle);
   padding: 6px 8px;
   text-align: left;
   border-bottom: 1px solid var(--border-soft);
-  border-right: 1px solid #2a2a2a;
+  border-right: 1px solid var(--border-soft);
   position: sticky;
   top: 0;
   z-index: 1;
@@ -441,14 +509,14 @@ header button.primary {
   padding: 6px 8px;
   text-align: left;
   vertical-align: top;
-  border-top: 1px solid #1b1b1b;
-  border-right: 1px solid #181818;
+  border-top: 1px solid var(--bg-root);
+  border-right: 1px solid var(--bg-elev-1);
   background: var(--bg-elev-2);
 }
 
 /* Alternate row shading */
 #table tbody tr:nth-child(even) td {
-  background: #191919;
+  background: var(--bg-shading-even);
 }
 
 /* Row hover + highlighted state */
@@ -457,20 +525,20 @@ header button.primary {
 }
 
 .row:hover td {
-  background: #222222;
+  background: var(--bg-shading-hover);
 }
 
 .row.highlighted td {
-  background: rgba(77, 171, 247, 0.25) !important;
+  background: var(--accent-soft) !important;
 }
 
 /* Column-specific helpers */
 .removedCell {
-  color: #ff7961;
+  color: var(--removed);
 }
 
 .addedCell {
-  color: #81c784;
+  color: var(--added);
 }
 
 /* Δ columns (rightmost 3 numeric delta columns) */
@@ -487,8 +555,8 @@ header button.primary {
   gap: 4px;
   padding: 2px 4px;
   border-radius: 6px;
-  background: rgba(255, 167, 38, 0.12);
-  border: 1px solid rgba(255, 167, 38, 0.7);
+  background: var(--changed-bg);
+  border: 1px solid var(--changed-border);
   font-variant-numeric: tabular-nums;
 }
 
@@ -524,21 +592,21 @@ header button.primary {
 }
 
 .pill.added {
-  background: rgba(102, 187, 106, 0.16);
+  background: var(--added-bg);
   color: var(--added);
-  border: 2px solid rgba(129, 199, 132, 0.7);
+  border: 2px solid var(--added-border);
 }
 
 .pill.removed {
-  background: rgba(239, 83, 80, 0.16);
+  background: var(--removed-bg);
   color: var(--removed);
-  border: 2px solid rgba(239, 154, 154, 0.7);
+  border: 2px solid var(--removed-border);
 }
 
 .pill.changed {
-  background: rgba(255, 167, 38, 0.16);
+  background: var(--changed-bg);
   color: var(--changed);
-  border: 2px solid rgba(255, 183, 77, 0.7);
+  border: 2px solid var(--changed-border);
 }
 
 /* ========================================================================
@@ -550,7 +618,7 @@ header button.primary {
   min-height: 0;
   border-radius: var(--radius-panel);
   border: 1px solid var(--border-soft);
-  background: #000;
+  background: var(--map-bg);
 }
 
 /* Labels drawn via Leaflet's divIcons */
@@ -570,11 +638,11 @@ header button.primary {
   left: 12px;
   padding: 10px 12px;
   border-radius: 12px;
-  background: rgba(20, 20, 20, 0.92);
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.9);
+  background: var(--bg-header);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
   font-size: 12px;
   color: var(--text-normal);
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border-glass);
 }
 
 .legend-title {
@@ -594,7 +662,7 @@ header button.primary {
   height: 6px;
   border-radius: 3px;
   display: inline-block;
-  border: 1px solid rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(0, 0, 0, 0.1);
 }
 
 .lg-unchanged {
@@ -611,6 +679,11 @@ header button.primary {
 
 .lg-removed {
   background: var(--removed);
+}
+
+.lg-selected {
+  background: #00FFFF;
+  border: 1px solid rgba(0, 255, 255, 0.5);
 }
 
 /* ========================================================================
@@ -638,9 +711,9 @@ header button.primary {
 #modal,
 #compareModal,
 #helpModal {
-  background: rgba(24, 24, 24, 0.96) !important;
+  background: var(--bg-elev-2) !important;
   border-radius: 18px !important;
-  border: 1px solid rgba(255, 255, 255, 0.06) !important;
+  border: 1px solid var(--border-glass) !important;
   color: var(--text-normal) !important;
   max-width: 900px;
   width: 90vw;
@@ -660,7 +733,7 @@ header button.primary {
   padding: 12px 14px;
   border-bottom: 1px solid var(--border-soft) !important;
   border-radius: 18px 18px 0 0;
-  background: linear-gradient(90deg, #202020, #181818) !important;
+  background: var(--bg-elev-3) !important;
 }
 
 #modal h2,
@@ -687,7 +760,7 @@ header button.primary {
   justify-content: flex-end;
   padding: 10px 14px;
   border-top: 1px solid var(--border-soft) !important;
-  background: #181818;
+  background: var(--bg-elev-1);
 }
 
 /* Force all modal descendants to use light text on dark bg */
@@ -721,9 +794,9 @@ header button.primary {
 /* Tag badge in modal */
 .tag {
   display: inline-block;
-  background: rgba(77, 171, 247, 0.15);
-  border: 1px solid rgba(77, 171, 247, 0.7);
-  color: #90caf9;
+  background: var(--accent-soft);
+  border: 1px solid var(--accent);
+  color: var(--accent);
   border-radius: var(--radius-pill);
   padding: 2px 8px;
   font-size: 12px;
@@ -737,7 +810,7 @@ table.modal-hydro {
 }
 
 table.modal-hydro thead th {
-  background: #191919;
+  background: var(--bg-elev-3);
   border-bottom: 1px solid var(--border-soft);
   padding: 8px 10px;
   text-align: left;
@@ -753,7 +826,7 @@ table.modal-hydro tbody td {
 }
 
 table.modal-hydro tbody tr:nth-child(odd) {
-  background: rgba(255, 255, 255, 0.02);
+  background: var(--border-glass);
 }
 
 table.modal-hydro .resp {
@@ -772,8 +845,8 @@ table.modal-hydro .delta {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  background: rgba(255, 167, 38, 0.15);
-  border: 1px solid rgba(255, 167, 38, 0.7);
+  background: var(--changed-bg);
+  border: 1px solid var(--changed-border);
   border-radius: 8px;
   padding: 2px 6px;
   font-variant-numeric: tabular-nums;
@@ -812,7 +885,7 @@ input[type="file"] {
 
 .file-name-display {
   font-size: 12px;
-  color: rgba(255, 255, 255, 0.8);
+  color: var(--text-normal);
   max-width: 180px;
   overflow: hidden;
   text-overflow: ellipsis;
