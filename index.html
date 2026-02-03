@@ -31,14 +31,6 @@
     <div class="menu">
       <div class="menu-btn">Map</div>
       <div class="menu-content">
-        <label>Basemap:
-          <select id="basemapSelect" title="Basemap" style="width:100%; margin-top:4px; padding: 4px;">
-            <option value="street" selected>Street</option>
-            <option value="aerial">Aerial</option>
-            <option value="none">None</option>
-          </select>
-        </label>
-        <hr>
         <label>Coordinate System:
           <select id="crsSelect" title="Coordinate System" style="width:100%; margin-top:4px; padding: 4px;">
             <option value="EPSG:3735" selected>NAD83 / Ohio South (ftUS)</option>
@@ -58,6 +50,7 @@
     <div id="app-title-group">
       <h1>SWMM Comparison App (BETA)</h1>
       <img src="SWMM%20Comparison%20App%20Icon.ico" alt="App Icon">
+      <button id="themeBtn" title="Toggle Theme" style="margin-right:4px;">☀/☾</button>
       <button id="helpBtn" class="help-button" title="Help">?</button>
     </div>
   </header>
@@ -109,6 +102,7 @@
       <div class="lg-item"><span class="lg-swatch lg-changed"></span><span>Changed</span></div>
       <div class="lg-item"><span class="lg-swatch lg-added"></span><span>Added</span></div>
       <div class="lg-item"><span class="lg-swatch lg-removed"></span><span>Removed</span></div>
+      <div class="lg-item"><span class="lg-swatch lg-selected"></span><span>Selected</span></div>
     </div>
   </template>
 

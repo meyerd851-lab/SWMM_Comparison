@@ -28,6 +28,29 @@ function setStatus(s) {
   else document.getElementById('status').textContent = s;
 }
 
+// Theme handling
+export function initTheme() {
+  const storedTheme = localStorage.getItem('swmm_theme');
+  const prefersLight = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches;
+  const theme = storedTheme || (prefersLight ? 'light' : 'dark');
+  document.documentElement.setAttribute('data-theme', theme);
+  updateThemeIcon();
+}
+
+export function toggleTheme() {
+  const current = document.documentElement.getAttribute('data-theme');
+  const next = current === 'light' ? 'dark' : 'light';
+  document.documentElement.setAttribute('data-theme', next);
+  localStorage.setItem('swmm_theme', next);
+  updateThemeIcon();
+}
+
+function updateThemeIcon() {
+  const current = document.documentElement.getAttribute('data-theme');
+  const btn = document.getElementById('themeBtn');
+  if (btn) btn.textContent = current === 'light' ? '☀' : '☾';
+}
+
 // Worker reference (will be set by app.js)
 let workerRef = null;
 export function setWorker(worker) {

@@ -11,7 +11,7 @@
 import { state } from './state.js';
 import { renderSections } from './table.js';
 import { drawGeometry } from './map.js';
-import { makeResizable, openHelpModal, closeHelpModal, saveSession, loadSession, exportToExcel, exportToShapefile, openDetail, closeModal, copyRowJSON, updateFileName, openCompareModal, closeCompareModal, setWorker, setSetStatusCallback } from './ui.js';
+import { makeResizable, openHelpModal, closeHelpModal, saveSession, loadSession, exportToExcel, exportToShapefile, openDetail, closeModal, copyRowJSON, updateFileName, openCompareModal, closeCompareModal, setWorker, setSetStatusCallback, initTheme, toggleTheme } from './ui.js';
 import { setOpenDetailCallback } from './table.js';
 
 // ==============================================================================
@@ -36,6 +36,7 @@ function setStatus(s) {
   document.getElementById('status').textContent = s;
 }
 setSetStatusCallback(setStatus);
+initTheme();
 
 // Handle messages received FROM the worker
 worker.onmessage = (ev) => {
@@ -147,6 +148,7 @@ document.getElementById('exportShp').addEventListener('click', exportToShapefile
 
 // Help button
 document.getElementById('helpBtn').addEventListener('click', openHelpModal);
+document.getElementById('themeBtn').addEventListener('click', toggleTheme);
 
 // Modal close handlers
 window.closeModal = closeModal;

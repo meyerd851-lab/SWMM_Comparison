@@ -11,23 +11,24 @@ map.createPane('linkPane').style.zIndex = 390;
 map.createPane('nodePane').style.zIndex = 410;
 
 // Basemap layers
+// Basemap layers
 const baseLayers = {
-  street: L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  "Street": L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     attribution: "&copy; OpenStreetMap"
   }),
-  aerial: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+  "Aerial": L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
     attribution: 'Tiles &copy; Esri'
-  })
+  }),
+  "None": L.tileLayer('', { opacity: 0 }) // Dummy layer for "None"
 };
-let activeBase = null;
 
+// Default basemap
+baseLayers["Street"].addTo(map);
+
+// Remove manual setBasemap export, let Leaflet handle it via Control
 export function setBasemap(which) {
-  if (activeBase) map.removeLayer(activeBase);
-  if (which === 'none') { activeBase = null; return; }
-  activeBase = baseLayers[which] || baseLayers.street;
-  activeBase.addTo(map);
+  // Compatibility stub if called from elsewhere, but mostly unused now
 }
-setBasemap('street');
 
 // Add legend control
 map.addControl(new (L.Control.extend({
@@ -35,10 +36,18 @@ map.addControl(new (L.Control.extend({
 }))({ position: "bottomleft" }));
 
 // Layer groups
+// Layer groups
+// Parent groups for toggling
+const overlayGroups = {
+  nodes: L.layerGroup().addTo(map),
+  links: L.layerGroup().addTo(map),
+  subs: L.layerGroup().addTo(map)
+};
+
 export const layers = {
-  nodes: { unchanged: L.layerGroup().addTo(map), changed: L.layerGroup().addTo(map), added: L.layerGroup().addTo(map), removed: L.layerGroup().addTo(map) },
-  links: { unchanged: L.layerGroup().addTo(map), changed: L.layerGroup().addTo(map), added: L.layerGroup().addTo(map), removed: L.layerGroup().addTo(map) },
-  subs: { unchanged: L.layerGroup().addTo(map), changed: L.layerGroup().addTo(map), added: L.layerGroup().addTo(map), removed: L.layerGroup().addTo(map) },
+  nodes: { unchanged: L.layerGroup().addTo(overlayGroups.nodes), changed: L.layerGroup().addTo(overlayGroups.nodes), added: L.layerGroup().addTo(overlayGroups.nodes), removed: L.layerGroup().addTo(overlayGroups.nodes) },
+  links: { unchanged: L.layerGroup().addTo(overlayGroups.links), changed: L.layerGroup().addTo(overlayGroups.links), added: L.layerGroup().addTo(overlayGroups.links), removed: L.layerGroup().addTo(overlayGroups.links) },
+  subs: { unchanged: L.layerGroup().addTo(overlayGroups.subs), changed: L.layerGroup().addTo(overlayGroups.subs), added: L.layerGroup().addTo(overlayGroups.subs), removed: L.layerGroup().addTo(overlayGroups.subs) },
   select: L.layerGroup().addTo(map)
 };
 
@@ -546,7 +555,14 @@ function hasHoverElement(latlng) {
 
 map.on('click', (e) => {
   const clickedElements = findNearbyElements(e.latlng);
-  if (clickedElements.length > 0) showMapPopup(e.latlng, clickedElements, true);
+  if (clickedElements.length > 0) {
+    showMapPopup(e.latlng, clickedElements, true);
+  } else {
+    // Deselect
+    map.closePopup();
+    layers.select.clearLayers();
+    document.querySelectorAll('#table .row.highlighted').forEach(r => r.classList.remove('highlighted'));
+  }
 });
 
 // Cursor Hover Effect
@@ -564,8 +580,19 @@ document.getElementById('crsSelect').addEventListener('change', (e) => {
   }
 });
 
-document.getElementById('basemapSelect').addEventListener('change', (e) => setBasemap(e.target.value));
 
+// Add Leaflet Layers Control
+// This replaces the manual checkboxes for Nodes/Links/Subs and Basemap dropdown
+const overlays = {
+  "Nodes": overlayGroups.nodes,
+  "Links": overlayGroups.links,
+  "Subcatchments": overlayGroups.subs
+  // Labels could also go here if we wanted: "Labels": labelsLayer
+};
+
+L.control.layers(baseLayers, overlays, { position: 'topright' }).addTo(map);
+
+// Labels Toggle (kept separate as requested, or could move to control)
 document.getElementById('labelsToggle').addEventListener('change', () => {
   if (!state.LAST.json) return;
   throttledDrawLabels();
