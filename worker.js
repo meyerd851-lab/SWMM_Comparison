@@ -6,16 +6,16 @@ self.onmessage = async (ev) => {
   try {
     if (msg.type === "init") {
       if (!pyodide) {
-        self.postMessage({ type: "progress", payload: "Loading Pyodide…" });
+        self.postMessage({ type: "progress", payload: "Loading…" });
         importScripts("https://cdn.jsdelivr.net/pyodide/v0.25.1/full/pyodide.js");
         pyodide = await loadPyodide({ indexURL: "https://cdn.jsdelivr.net/pyodide/v0.25.1/full/" });
 
         // Fetch your local module and write it to the Pyodide FS
-        self.postMessage({ type: "progress", payload: "Loading core_web.py…" });
+        self.postMessage({ type: "progress", payload: "Loading…" });
         const src = await (await fetch("./core_web.py", { cache: "no-store" })).text();
         pyodide.FS.writeFile("core_web.py", src);
 
-        self.postMessage({ type: "progress", payload: "Loading shapefile.py…" });
+        self.postMessage({ type: "progress", payload: "Loading…" });
         const shpSrc = await (await fetch("./shapefile.py", { cache: "no-store" })).text();
         pyodide.FS.writeFile("shapefile.py", shpSrc);
 
@@ -28,7 +28,7 @@ self.onmessage = async (ev) => {
 
     if (msg.type === "compare") {
       if (!pyodide || !core) throw new Error("Pyodide not initialized.");
-      self.postMessage({ type: "progress", payload: "Running comparison in Python…" });
+      self.postMessage({ type: "progress", payload: "Running comparison…" });
 
       // Convert ArrayBuffers -> Python bytes
       const tolerancesJS = msg.tolerances || {};

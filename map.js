@@ -332,6 +332,8 @@ export function drawGeometry(json) {
   if (anyLL.length) map.fitBounds(L.latLngBounds(anyLL), { padding: [20, 20] });
 
   throttledDrawLabels();
+  // Re-apply current filter if any
+  setMapFilter(currentFilterMode);
 }
 
 // --- HIGHLIGHTING ---
@@ -581,18 +583,162 @@ document.getElementById('crsSelect').addEventListener('change', (e) => {
 });
 
 
-// Add Leaflet Layers Control
-// This replaces the manual checkboxes for Nodes/Links/Subs and Basemap dropdown
+// --- MAP VIEW FILTER SETTINGS ---
+
+const FILTER_MODES = {
+  "Default": { label: "Default View", color: null },
+  "Changed": { label: "Focus: Changed", color: C.changed },
+  "Added": { label: "Focus: Added", color: C.added },
+  "Removed": { label: "Focus: Removed", color: C.removed }
+};
+
+let currentFilterMode = "Default";
+
+export function setMapFilter(mode) {
+  const settings = FILTER_MODES[mode];
+  if (!settings) return;
+  currentFilterMode = mode;
+
+  // 1. Update Layer Styles
+  const targetColor = settings.color;
+
+  const categories = ['unchanged', 'changed', 'added', 'removed'];
+
+  categories.forEach(cat => {
+    let colorToUse;
+    // Determine color
+    if (mode === 'Default') {
+      colorToUse = C[cat];
+    } else {
+      if (cat.toLowerCase() === mode.toLowerCase()) {
+        colorToUse = targetColor;
+      } else {
+        colorToUse = C.unchanged; // Grey out
+      }
+    }
+
+    // Apply to nodes
+    layers.nodes[cat].eachLayer(layer => {
+      layer.setStyle({
+        fillColor: colorToUse,
+        color: "#000",
+        fillOpacity: 1
+      });
+    });
+
+    // Apply to links
+    layers.links[cat].eachLayer(layer => {
+      layer.setStyle({
+        color: colorToUse,
+        opacity: 0.95,
+        weight: 3
+      });
+    });
+
+    // Apply to subs
+    layers.subs[cat].eachLayer(layer => {
+      layer.setStyle({
+        color: colorToUse,
+        fillColor: colorToUse,
+        fillOpacity: 0.25,
+        weight: 2
+      });
+    });
+  });
+
+  // 2. Update Legend
+  updateLegend(mode);
+}
+
+function updateLegend(mode) {
+  const legendDiv = document.querySelector('.legend');
+  if (!legendDiv) return;
+
+  const buildItem = (colorVar, label) => {
+    return `<div class="lg-item"><span class="lg-swatch" style="background:${colorVar}"></span><span>${label}</span></div>`;
+  };
+
+  let html = `<div class="legend-title">Map Legend</div>`;
+
+  if (mode === 'Default') {
+    html += buildItem('var(--muted)', 'Unchanged');
+    html += buildItem('var(--changed)', 'Changed');
+    html += buildItem('var(--added)', 'Added');
+    html += buildItem('var(--removed)', 'Removed');
+  } else {
+    // Focus Mode
+    const focusColor = (mode === 'Changed') ? 'var(--changed)' : (mode === 'Added' ? 'var(--added)' : 'var(--removed)');
+    html += buildItem(focusColor, mode);
+    html += buildItem('var(--muted)', 'Others');
+  }
+
+  html += `<div class="lg-item"><span class="lg-swatch lg-selected"></span><span>Selected</span></div>`;
+
+  legendDiv.innerHTML = html;
+}
+
+// --- LAYERS CONTROL & INTEGRATION ---
+
 const overlays = {
   "Nodes": overlayGroups.nodes,
   "Links": overlayGroups.links,
   "Subcatchments": overlayGroups.subs
-  // Labels could also go here if we wanted: "Labels": labelsLayer
 };
 
-L.control.layers(baseLayers, overlays, { position: 'topright' }).addTo(map);
+// Create the standard layers control
+const layersControl = L.control.layers(baseLayers, overlays, { position: 'topright' }).addTo(map);
 
-// Labels Toggle (kept separate as requested, or could move to control)
+// Inject the Filter Dropdown into the Layers Control
+(function injectFilterControl() {
+  const container = layersControl.getContainer();
+  const form = container.querySelector('.leaflet-control-layers-list');
+
+  if (!form) return;
+
+  const separator = document.createElement('div');
+  separator.className = 'leaflet-control-layers-separator';
+
+  const wrapper = document.createElement('div');
+  wrapper.style.padding = "5px 10px";
+
+  const label = document.createElement('div');
+  label.innerText = "Map View Mode:";
+  label.style.marginBottom = "4px";
+  label.style.fontWeight = "bold";
+  label.style.fontSize = "12px";
+  wrapper.appendChild(label);
+
+  const select = document.createElement('select');
+  select.style.width = "100%";
+  select.style.padding = "4px";
+  select.style.borderRadius = "4px";
+  select.style.border = "1px solid #ccc";
+  select.style.fontSize = "11px";
+  select.style.cursor = "pointer";
+
+  Object.keys(FILTER_MODES).forEach(mode => {
+    const opt = document.createElement('option');
+    opt.value = mode;
+    opt.innerText = FILTER_MODES[mode].label.replace("Focus: ", "");
+    select.appendChild(opt);
+  });
+
+  select.onchange = (e) => {
+    setMapFilter(e.target.value);
+  };
+
+  // Prevent map interaction when using the select
+  L.DomEvent.disableClickPropagation(select);
+  L.DomEvent.disableScrollPropagation(select);
+
+  wrapper.appendChild(select);
+
+  // Insert at the top: Wrapper first, then a separator
+  form.prepend(separator);
+  form.prepend(wrapper);
+})();
+
+// Labels Toggle
 document.getElementById('labelsToggle').addEventListener('change', () => {
   if (!state.LAST.json) return;
   throttledDrawLabels();
