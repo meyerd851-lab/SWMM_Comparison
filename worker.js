@@ -15,12 +15,17 @@ self.onmessage = async (ev) => {
         const src = await (await fetch("./core_web.py", { cache: "no-store" })).text();
         pyodide.FS.writeFile("core_web.py", src);
 
+        self.postMessage({ type: "progress", payload: "Loading core_results.py…" });
+        const resSrc = await (await fetch("./core_results.py", { cache: "no-store" })).text();
+        pyodide.FS.writeFile("core_results.py", resSrc);
+
         self.postMessage({ type: "progress", payload: "Loading shapefile.py…" });
         const shpSrc = await (await fetch("./shapefile.py", { cache: "no-store" })).text();
         pyodide.FS.writeFile("shapefile.py", shpSrc);
 
         // Import the module
         core = pyodide.pyimport("core_web");
+        core_results = pyodide.pyimport("core_results");
       }
       self.postMessage({ type: "ready" });
       return;
@@ -34,17 +39,43 @@ self.onmessage = async (ev) => {
       const tolerancesJS = msg.tolerances || {};
       const hasTolerances = Object.keys(tolerancesJS).length > 0;
 
-      const py_b1 = pyodide.toPy(new Uint8Array(msg.file1));
-      const py_b2 = pyodide.toPy(new Uint8Array(msg.file2));
+      // Safe access helper
+      const toPyBytes = (buf) => buf ? pyodide.toPy(new Uint8Array(buf)) : null;
+
+      const py_b1 = toPyBytes(msg.file1);
+      const py_b2 = toPyBytes(msg.file2);
       const py_tolerances = hasTolerances ? pyodide.toPy(tolerancesJS) : undefined;
 
+      // RPT files (text)
+      const rpt1_text = msg.rpt1_text || null;
+      const rpt2_text = msg.rpt2_text || null;
+
       try {
-        const out = core.run_compare(py_b1, py_b2, py_tolerances);
-        const jsOut = out.toString();
-        self.postMessage({ type: "result", payload: jsOut });
+        // Run INP comparison (always, if files present)
+        let inp_out = "{}";
+        if (py_b1 && py_b2) {
+          const out = core.run_compare(py_b1, py_b2, py_tolerances);
+          inp_out = out.toString();
+        }
+
+        // Run RPT comparison (optional)
+        let rpt_out = "null";
+        if (rpt1_text && rpt2_text) {
+          rpt_out = core_results.build_side_by_side(rpt1_text, rpt2_text);
+        }
+
+        // Combine
+        // We wrap them in a bigger JSON structure
+        const combined = JSON.stringify({
+          inp: JSON.parse(inp_out),
+          rpt: JSON.parse(rpt_out)
+        });
+
+        self.postMessage({ type: "result", payload: combined });
+
       } finally {
-        py_b1.destroy();
-        py_b2.destroy();
+        if (py_b1) py_b1.destroy();
+        if (py_b2) py_b2.destroy();
         if (py_tolerances) py_tolerances.destroy();
       }
       return;

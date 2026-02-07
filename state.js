@@ -1,6 +1,7 @@
 // Shared application state
 export const state = {
-  LAST: { json: null, currentSection: null },
+  LAST: { json: null, resultJson: null, currentSection: null },
+  UI_MODE: 'INP', // 'INP' or 'RESULTS'
   FILES: { f1Name: null, f2Name: null, f1Bytes: null, f2Bytes: null },
   CURRENT_CRS: "EPSG:3735",
   SESSION_VERSION: 1,

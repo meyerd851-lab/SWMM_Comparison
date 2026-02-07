@@ -57,6 +57,10 @@
 
   <div id="wrap">
     <div id="left">
+      <div class="tabs" style="display:flex; gap: 4px; border-bottom: 2px solid #ddd; padding: 0 8px;">
+        <button id="tabInp" class="tab active" onclick="switchTab('INP')">INP Comparison</button>
+        <button id="tabRes" class="tab" onclick="switchTab('RESULTS')">Results Comparison</button>
+      </div>
       <div id="sectionsPanel" class="panel">
         <h3>Sections</h3>
         <div id="sections">Run a comparison first.</div>
@@ -68,14 +72,20 @@
     <div id="right">
       <div class="panel" style="gap:8px;">
         <div id="filters">
-          <label><input type="checkbox" id="fAdded" checked> Added</label>
-          <label><input type="checkbox" id="fRemoved" checked> Removed</label>
+          <div id="filter-group-inp">
+            <label><input type="checkbox" id="fAdded" checked> Added</label>
+            <label><input type="checkbox" id="fRemoved" checked> Removed</label>
+          </div>
+
           <label><input type="checkbox" id="fChanged" checked> Changed</label>
           <label style="margin-left: 10px; border-left: 1px solid #ddd; padding-left: 10px;">
             <input type="checkbox" id="fShowDiffs"> Show Diffs
           </label>
           <input id="search" placeholder="Filter rows…" />
-          <span id="currentSectionLabel" style="color:#333;font-weight:600;"></span>
+
+
+
+          <span id="currentSectionLabel" style="color:#333;font-weight:600; margin-left:auto;"></span>
         </div>
       </div>
 
@@ -97,13 +107,29 @@
 
   <template id="legend">
     <div class="legend">
-      <div class="legend-title">Map Legend</div>
-      <div class="lg-item"><span class="lg-swatch lg-unchanged"></span><span>Unchanged</span></div>
-      <div class="lg-item"><span class="lg-swatch lg-changed"></span><span>Changed</span></div>
-      <div class="lg-item"><span class="lg-swatch lg-added"></span><span>Added</span></div>
-      <div class="lg-item"><span class="lg-swatch lg-removed"></span><span>Removed</span></div>
-      <div class="lg-item"><span class="lg-swatch lg-selected"></span><span>Selected</span></div>
-    </div>
+      <div id="legend-diffs">
+        <div class="legend-title">Diff Status</div>
+        <div class="lg-item"><span class="lg-swatch lg-unchanged"></span> Unchanged</div>
+        <div class="lg-item"><span class="lg-swatch lg-changed"></span> Changed</div>
+        <div class="lg-item"><span class="lg-swatch lg-added"></span> Added</div>
+        <div class="lg-item"><span class="lg-swatch lg-removed"></span> Removed</div>
+        <div class="lg-item"><span class="lg-swatch lg-selected"></span> Selected</div>
+      </div>
+      <div id="legend-results" style="display:none">
+        <div class="legend-title">% Diff (Results)</div>
+        <div class="lg-item"><span class="lg-swatch" style="background:#2ecc71"></span> Only in B (Added)</div>
+        <div class="lg-item"><span class="lg-swatch" style="background:#e74c3c"></span> Only in A (Removed)</div>
+        <div class="lg-item"><span class="lg-swatch" style="background:#00ff00"></span> > +20%</div>
+        <div class="lg-item"><span class="lg-swatch" style="background:#adff2f"></span> +5% to +20%</div>
+        <div class="lg-item"><span class="lg-swatch" style="background:#f39c12"></span> ±5%</div>
+        <div class="lg-item"><span class="lg-swatch" style="background:#cd5c5c"></span> -5% to -20%</div>
+        <div class="lg-item"><span class="lg-swatch" style="background:#ff0000"></span>
+          < -20%</div>
+            <div class="lg-item"><span class="lg-swatch" style="background:#7f8c8d"></span> No Change (Same)</div>
+            <div class="lg-item"><span class="lg-swatch lg-selected"></span> Selected</div>
+            <div style="margin-top:4px; font-size:10px; color:#555;">* Requires INP geom</div>
+        </div>
+      </div>
   </template>
 
   <!-- Details Modal -->
@@ -131,7 +157,7 @@
     style="position:fixed;inset:0;background:rgba(0,0,0,.35);display:none;align-items:center;justify-content:center;z-index:10000;"
     onclick="if(event.target===this) closeCompareModal()">
     <div id="compareModal"
-      style="background:#fff;border-radius:10px;border:1px solid #ddd;max-width:550px;width:90vw;display:flex;flex-direction:column;">
+      style="background:#fff;border-radius:10px;border:1px solid #ddd;max-width:550px;width:90vw;display:flex;flex-direction:column;max-height:90vh;">
 
       <header
         style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:1px solid #eee;border-radius: 10px 10px 0 0;">
@@ -142,7 +168,7 @@
       <div class="body" style="padding:10px 14px;overflow:auto; display: grid; grid-template-columns: 1fr; gap: 12px;">
         <h3
           style="grid-column: 1 / -1; margin: 0; font-size: 14px; border-bottom: 1px solid #eee; padding-bottom: 8px;">
-          Model Files</h3>
+          Model Files (INP)</h3>
         <div class="file-input-container">
           <label for="f1" class="file-btn-label" style="color: #222; border-color: #ccc;">First .inp</label>
           <input id="f1" type="file" accept=".inp,.txt" />
@@ -152,6 +178,20 @@
           <label for="f2" class="file-btn-label" style="color: #222; border-color: #ccc;">Second .inp</label>
           <input id="f2" type="file" accept=".inp,.txt" />
           <span id="f2-name" class="file-name-display" style="color: #555;">No file selected</span>
+        </div>
+
+        <h3
+          style="grid-column: 1 / -1; margin: 10px 0 0 0; font-size: 14px; border-bottom: 1px solid #eee; padding-bottom: 8px;">
+          Result Reports (RPT) <span style="font-weight:normal;color:#666;font-size:11px;">(Optional)</span></h3>
+        <div class="file-input-container">
+          <label for="r1" class="file-btn-label" style="color: #222; border-color: #ccc;">First .rpt</label>
+          <input id="r1" type="file" accept=".rpt,.txt" />
+          <span id="r1-name" class="file-name-display" style="color: #555;">(None)</span>
+        </div>
+        <div class="file-input-container">
+          <label for="r2" class="file-btn-label" style="color: #222; border-color: #ccc;">Second .rpt</label>
+          <input id="r2" type="file" accept=".rpt,.txt" />
+          <span id="r2-name" class="file-name-display" style="color: #555;">(None)</span>
         </div>
       </div>
 

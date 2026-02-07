@@ -40,7 +40,34 @@ export function groupHydroSummary(d) {
   return rows;
 }
 
+// Alias for ui.js
+export function renderSectionList() {
+  // Determine which dataset to use
+  if (state.UI_MODE === 'RESULTS') {
+    const json = state.LAST.resultJson;
+    if (!json) {
+      document.getElementById('sections').textContent = "No results loaded.";
+      return;
+    }
+    renderResultsSections(json);
+  } else {
+    const json = state.LAST.json;
+    if (!json) {
+      document.getElementById('sections').textContent = "Run a comparison first.";
+      return;
+    }
+    renderInpSections(json);
+  }
+}
+
+// Ensure backward compatibility if called directly
 export function renderSections(json) {
+  // If called directly with INP json, assuming INP mode
+  state.UI_MODE = 'INP';
+  renderSectionList();
+}
+
+function renderInpSections(json) {
   const diffs = json.diffs || {};
   const cont = document.getElementById('sections');
   const items = [];
@@ -72,7 +99,82 @@ export function renderSections(json) {
     };
     cont.appendChild(div);
   });
+  // Auto-select first
+  if (!state.LAST.currentSection || !diffs[state.LAST.currentSection]) {
+    cont.firstChild?.click();
+  } else {
+    // re-select current
+    const node = [...cont.children].find(n => n.dataset.sec === state.LAST.currentSection);
+    if (node) node.click();
+  }
+}
+
+function renderResultsSections(json) {
+  const sections = json.sections || [];
+  const cont = document.getElementById('sections');
+
+  if (!sections.length) { cont.textContent = "No parsed sections in results."; return; }
+  cont.innerHTML = "";
+
+  // 1. Structured Sections
+  sections.forEach((s) => {
+    const sec = s.section;
+    const meta = s.meta || {};
+    const div = document.createElement('div');
+    div.className = 'sec';
+    div.dataset.sec = sec;
+    div.innerHTML = `<span>${sec}</span>
+      <span class="counts">
+        <span class="pill changed" style="background:transparent;border:1px solid #ddd;color:#666">${meta.changed || 0}</span>
+      </span>`;
+    div.onclick = () => {
+      document.querySelectorAll('.sec').forEach(n => n.classList.remove('active'));
+      div.classList.add('active');
+      state.LAST.currentSection = sec;
+      document.getElementById('currentSectionLabel').textContent = sec;
+      renderTableFor(sec);
+
+      // Update Map controls if applicable
+      import('./map.js').then(mod => mod.updateMapMetricOptions(sec));
+    };
+    cont.appendChild(div);
+  });
+
+  // 2. Unstructured Blocks (Analysis Options, etc.)
+  const blocks = json.blocks_side_by_side || {};
+  const blockNames = Object.keys(blocks).sort();
+
+  if (blockNames.length > 0) {
+    const sep = document.createElement('div');
+    sep.style.padding = "8px 12px";
+    sep.style.fontWeight = "bold";
+    sep.style.color = "#888";
+    sep.style.textTransform = "uppercase";
+    sep.style.fontSize = "11px";
+    sep.innerText = "Text Blocks";
+    cont.appendChild(sep);
+  }
+
+  blockNames.forEach(name => {
+    const div = document.createElement('div');
+    div.className = 'sec';
+    div.dataset.sec = name;
+    div.innerHTML = `<span>${name}</span>`;
+    div.onclick = () => {
+      document.querySelectorAll('.sec').forEach(n => n.classList.remove('active'));
+      div.classList.add('active');
+      state.LAST.currentSection = name;
+      document.getElementById('currentSectionLabel').textContent = name;
+      renderTableFor(name);
+
+      // Blocks generally don't have map metrics, so clear map options
+      import('./map.js').then(mod => mod.updateMapMetricOptions(null));
+    }
+    cont.appendChild(div);
+  });
+
   cont.firstChild?.click();
+
 }
 
 function passChangeFilter(changeType) {
@@ -85,6 +187,28 @@ function passChangeFilter(changeType) {
 let currentSort = { sec: null, col: 0, dir: 1 }; // dir: 1=asc, -1=desc
 
 export function renderTableFor(sec) {
+  if (state.UI_MODE === 'RESULTS') {
+    const json = state.LAST.resultJson;
+    if (!json) return;
+
+    // Check if it's a Structured Section
+    let secData = json.sections.find(s => s.section === sec);
+
+    if (secData) {
+      _renderStructuredTable(secData);
+    } else {
+      // Check if it's a Block
+      const blocks = json.blocks_side_by_side || {};
+      if (blocks[sec]) {
+        renderBlock(sec, blocks[sec]);
+      } else {
+        const table = document.getElementById('table');
+        table.innerHTML = `<tbody><tr><td colspan="99" style="padding:20px;text-align:center;color:#888">Section not found: ${sec}</td></tr></tbody>`;
+      }
+    }
+    return;
+  }
+
   const table = document.getElementById('table');
   const { diffs, headers } = state.LAST.json;
   const d = diffs[sec] || { added: {}, removed: {}, changed: {} };
@@ -332,6 +456,62 @@ export function renderTableFor(sec) {
   });
 }
 
+
+// Helper function for rendering structured tables (formerly renderResultsTable)
+function _renderStructuredTable(sectionData) {
+  const table = document.getElementById('table');
+  const { out_columns, rows, id_col } = sectionData;
+  const q = document.getElementById('search').value.trim().toLowerCase();
+
+  // Filtering
+  const fChanged = document.getElementById('fChanged').checked;
+
+  const filtered = rows.filter(r => {
+    const matchesSearch = !q || Object.values(r).some(v => String(v).toLowerCase().includes(q));
+    const matchesChange = !fChanged || (r.Status !== 'SAME');
+    return matchesSearch && matchesChange;
+
+  });
+
+  let thead = `<thead><tr>`;
+  out_columns.forEach(c => thead += `<th>${escapeHtml(c)}</th>`);
+  thead += `</tr></thead>`;
+
+  const body = filtered.map(r => {
+    let cls = '';
+    if (r.Status === 'CHANGED') cls = 'row status-CHANGED';
+    else if (r.Status === 'ONLY_IN_A') cls = 'row status-ONLY_IN_A';
+    else if (r.Status === 'ONLY_IN_B') cls = 'row status-ONLY_IN_B';
+    else cls = 'row status-SAME';
+
+    let tr = `<tr class="${cls}">`;
+    out_columns.forEach(c => {
+      tr += `<td>${escapeHtml(String(r[c] ?? ""))}`;
+      // Highlight cell if it is part of A/B pair and different? 
+      // Logic is usually handled by row status, but maybe per-cell later.
+      tr += `</td>`;
+    });
+    tr += `</tr>`;
+    return tr;
+  }).join("");
+
+  table.innerHTML = thead + `<tbody>${body || `<tr><td colspan="${out_columns.length}">No matches.</td></tr>`}</tbody>`;
+
+  // Map Interactivity
+  const idIndex = out_columns.indexOf(id_col);
+  table.querySelectorAll('tbody tr').forEach((tr) => {
+    const tds = tr.querySelectorAll('td');
+    if (tds.length > idIndex) {
+      const id = tds[idIndex].textContent;
+      tr.onclick = () => {
+        import('./map.js').then(mod => {
+          mod.highlightElement(sectionData.section, id, true);
+        });
+      };
+    }
+  });
+}
+
 // Initialize filter listeners
 ["fAdded", "fRemoved", "fChanged", "fShowDiffs", "search"].forEach(id => {
   document.getElementById(id).addEventListener(id === "search" ? "input" : "change", () => {
@@ -339,4 +519,58 @@ export function renderTableFor(sec) {
     renderTableFor(state.LAST.currentSection);
   });
 });
+
+function renderBlock(title, blockData) {
+  const table = document.getElementById('table');
+  const thead = table.tHead;
+  const tbody = table.tBodies[0];
+
+  // Clear existing
+  if (thead) thead.innerHTML = "";
+  if (tbody) tbody.innerHTML = "";
+
+  // Header
+  const hr = document.createElement('tr');
+  ["Report A", "Report B"].forEach(h => {
+    const th = document.createElement('th');
+    th.textContent = h;
+    th.style.width = "50%";
+    hr.appendChild(th);
+  });
+  // Create thead if missing (it might be depending of table init)
+  if (!thead) {
+    const newThead = table.createTHead();
+    newThead.appendChild(hr);
+  } else {
+    thead.appendChild(hr);
+  }
+
+  // Body - Just one row with two pre blocks
+  const tr = document.createElement('tr');
+
+  // Col A
+  const tdA = document.createElement('td');
+  tdA.style.verticalAlign = "top";
+  const preA = document.createElement('div');
+  preA.className = "cell-multiline"; // reuse existing class
+  preA.textContent = blockData.a || "(Empty)";
+  tdA.appendChild(preA);
+  tr.appendChild(tdA);
+
+  // Col B
+  const tdB = document.createElement('td');
+  tdB.style.verticalAlign = "top";
+  const preB = document.createElement('div');
+  preB.className = "cell-multiline"; // reuse existing class
+  preB.textContent = blockData.b || "(Empty)";
+  tdB.appendChild(preB);
+  tr.appendChild(tdB);
+
+  if (!tbody) {
+    const newTbody = table.createTBody();
+    newTbody.appendChild(tr);
+  } else {
+    tbody.appendChild(tr);
+  }
+}
 

@@ -56,10 +56,24 @@ worker.onmessage = (ev) => {
   }
   if (type === "result") {
     try {
-      const json = JSON.parse(payload);
-      state.LAST.json = json;
-      renderSections(json);
-      drawGeometry(json);
+      const allJson = JSON.parse(payload);
+
+      // If it's the old format (just INP diffs), wrap it
+      if (!allJson.inp && !allJson.rpt && allJson.diffs) {
+        state.LAST.json = allJson;
+        state.LAST.resultJson = null;
+      } else {
+        state.LAST.json = allJson.inp;
+        state.LAST.resultJson = allJson.rpt;
+      }
+
+      // Default to INP content unless we are in RESULTS mode? 
+      // Actually we stay in whatever mode we are in, or force switch to existing one.
+      // For now, let's refresh the view.
+
+      import('./ui.js').then(mod => mod.switchTab(state.UI_MODE || 'INP'));
+
+      drawGeometry(state.LAST.json); // Geometry always comes from INP
       setStatus("Done.");
     } catch (e) {
       console.error(e);
@@ -102,18 +116,25 @@ setOpenDetailCallback(openDetail);
 // File input handlers
 updateFileName('f1', 'f1-name');
 updateFileName('f2', 'f2-name');
+updateFileName('r1', 'r1-name');
+updateFileName('r2', 'r2-name');
 
 // Compare button
 document.getElementById('go').addEventListener('click', openCompareModal);
 
 // Run comparison from modal
 document.getElementById('runCompareFromModal').addEventListener('click', async () => {
-  const f1 = document.getElementById('f1').files?.[0];
-  const f2 = document.getElementById('f2').files?.[0];
-  if (!f1 || !f2) {
+  const fInp1 = document.getElementById('f1').files?.[0];
+  const fInp2 = document.getElementById('f2').files?.[0];
+
+  if (!fInp1 || !fInp2) {
     alert("Please select both INP files to compare.");
     return;
   }
+
+  // RPT files are optional
+  const fRpt1 = document.getElementById('r1').files?.[0];
+  const fRpt2 = document.getElementById('r2').files?.[0];
 
   const tolerances = {
     "CONDUIT_LENGTH": parseFloat(document.getElementById('tol_conduit_length').value) || 0,
@@ -123,14 +144,34 @@ document.getElementById('runCompareFromModal').addEventListener('click', async (
     "CONDUIT_ROUGHNESS": parseFloat(document.getElementById('tol_conduit_roughness').value) || 0,
   };
 
-  state.FILES.f1Name = f1.name;
-  state.FILES.f2Name = f2.name;
+  state.FILES.f1Name = fInp1.name;
+  state.FILES.f2Name = fInp2.name;
+
   setStatus("Reading files…");
-  const [b1, b2] = await Promise.all([f1.arrayBuffer(), f2.arrayBuffer()]);
+
+  // Read INP as ArrayBuffer (for Pyodide byte conversion)
+  // Read RPT as Text (since they are just parsed as strings)
+  const [b1, b2] = await Promise.all([fInp1.arrayBuffer(), fInp2.arrayBuffer()]);
+
+  let t1 = null, t2 = null;
+  if (fRpt1 && fRpt2) {
+    [t1, t2] = await Promise.all([fRpt1.text(), fRpt2.text()]);
+  }
+
   state.FILES.f1Bytes = b1;
   state.FILES.f2Bytes = b2;
+  // TODO: we should probably store RPT text in state too if we want to save/load it properly, 
+  // but for now let's just pass to worker.
+
   setStatus("Running comparison…");
-  worker.postMessage({ type: "compare", file1: b1, file2: b2, tolerances: tolerances });
+  worker.postMessage({
+    type: "compare",
+    file1: b1,
+    file2: b2,
+    rpt1_text: t1,
+    rpt2_text: t2,
+    tolerances: tolerances
+  });
   closeCompareModal();
 });
 

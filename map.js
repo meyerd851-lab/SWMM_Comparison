@@ -172,11 +172,22 @@ function isClickOnLink(containerPoint, layer, tolerancePx) {
 
 // --- LOGIC HELPERS ---
 
-export const secType = (sec) => (
-  ["JUNCTIONS", "OUTFALLS", "DIVIDERS", "STORAGE"].includes(sec) ? "nodes" :
-    ["CONDUITS", "PUMPS", "ORIFICES", "WEIRS", "OUTLETS"].includes(sec) ? "links" :
-      sec === "SUBCATCHMENTS" ? "subs" : null
-);
+export const secType = (sec) => {
+  if (!sec) return null;
+  const s = sec.toUpperCase();
+  // INP standard names
+  if (["JUNCTIONS", "OUTFALLS", "DIVIDERS", "STORAGE"].includes(s)) return "nodes";
+  if (["CONDUITS", "PUMPS", "ORIFICES", "WEIRS", "OUTLETS"].includes(s)) return "links";
+  if (s === "SUBCATCHMENTS") return "subs";
+
+  // RPT fuzzy names
+  const sl = sec.toLowerCase();
+  if (sl.includes('node') || sl.includes('outfall') || sl.includes('storage')) return 'nodes';
+  if (sl.includes('link') || sl.includes('conduit') || sl.includes('pump')) return 'links';
+  if (sl.includes('subcatchment')) return 'subs';
+
+  return null;
+};
 
 export function buildSets(diffs, renames) {
   const sets = {
@@ -343,7 +354,14 @@ export function highlightElement(section, id, shouldZoom = false) {
   document.querySelectorAll('#table .row.highlighted').forEach(r => r.classList.remove('highlighted'));
   const safeId = id.replace(/[^a-zA-Z0-9]/g, '_');
   const row = document.querySelector(`#table .row-id-${safeId}`);
-  if (row) { row.classList.add('highlighted'); row.dispatchEvent(new Event('highlight')); }
+  if (row) {
+    row.classList.add('highlighted');
+    // Force visual style
+    const old = row.style.backgroundColor;
+    row.style.backgroundColor = '#ffff99';
+    setTimeout(() => { row.style.backgroundColor = old; }, 2000);
+    row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
 
   const t = secType(section);
   if (!t) return;
@@ -597,3 +615,272 @@ document.getElementById('labelsToggle').addEventListener('change', () => {
   if (!state.LAST.json) return;
   throttledDrawLabels();
 });
+
+
+// ==============================================================================
+// RESULT VISUALIZATION (RPT)
+// ==============================================================================
+
+const RESULT_CONFIG = {
+  "Link Flow Summary": {
+    metric: "% Diff Max Flow",
+    type: "percent",
+    buckets: [
+      { max: 2, color: "#2ecc71", weight: 4, label: "± 2%" },
+      { max: 5, color: "#f1c40f", weight: 6, label: "± 2-5%" },
+      { max: 15, color: "#e67e22", weight: 8, label: "± 5-15%" },
+      { max: Infinity, color: "#e74c3c", weight: 10, label: "> 15%" }
+    ]
+  },
+  "Node Depth Summary": {
+    metric: "Diff Max Depth",
+    type: "absolute",
+    unit: "ft",
+    // ... (rest of config unchanged, just needed to start the block to replace weights)
+    // Actually I need to match valid chunks. I will do multiple chunks or a larger block if needed.
+    // Simplest is to just update the specific link section and the draw functions code.
+    // I'll split into chunks.
+
+    buckets: [
+      { max: 0.5, color: "#2ecc71", radius: 4, label: "± 0.5'" },
+      { max: 1.0, color: "#f1c40f", radius: 6, label: "± 0.5-1'" },
+      { max: 3.0, color: "#e67e22", radius: 8, label: "± 1-3'" },
+      { max: Infinity, color: "#e74c3c", radius: 10, label: "> 3'" }
+    ]
+  },
+  "Node Flooding Summary": {
+    metric: "Diff Hours Flooded",
+    type: "threshold",
+    threshold: 0.01,
+    buckets: [
+      { max: 0.01, color: "#f1c40f", radius: 6, label: "Minor Increase (< 0.01h)" },
+      { max: Infinity, color: "#e74c3c", radius: 9, label: "Increase (> 0.01h)" }
+    ]
+  },
+  "Node Inflow Summary": {
+    metric: "% Diff Total Inflow",
+    type: "percent",
+    buckets: [
+      { max: 2, color: "#2ecc71", radius: 4, label: "± 2%" },
+      { max: 5, color: "#f1c40f", radius: 6, label: "± 2-5%" },
+      { max: 15, color: "#e67e22", radius: 8, label: "± 5-15%" },
+      { max: Infinity, color: "#e74c3c", radius: 10, label: "> 15%" }
+    ]
+  },
+  "Node Surcharge Summary": {
+    metric: "Diff Hours Surcharged",
+    type: "threshold",
+    threshold: 0.01,
+    buckets: [
+      { max: 0.01, color: "#f1c40f", radius: 6, label: "Minor Increase (< 0.01h)" },
+      { max: Infinity, color: "#e74c3c", radius: 9, label: "Increase (> 0.01h)" }
+    ]
+  },
+  "Outfall Loading Summary": {
+    metric: "% Diff Total Volume",
+    type: "percent",
+    buckets: [
+      { max: 2, color: "#2ecc71", radius: 4, label: "± 2%" },
+      { max: 5, color: "#f1c40f", radius: 6, label: "± 2-5%" },
+      { max: 15, color: "#e67e22", radius: 8, label: "± 5-15%" },
+      { max: Infinity, color: "#e74c3c", radius: 10, label: "> 15%" }
+    ]
+  },
+  "Subcatchment Runoff Summary": {
+    metric: "% Diff Total Runoff", // Using volume
+    type: "percent",
+    buckets: [
+      { max: 2, color: "#2ecc71", weight: 1, label: "± 2%" },
+      { max: 5, color: "#f1c40f", weight: 2, label: "± 2-5%" },
+      { max: 15, color: "#e67e22", weight: 3, label: "± 5-15%" },
+      { max: Infinity, color: "#e74c3c", weight: 4, label: "> 15%" }
+    ]
+  }
+};
+
+
+export function setMapMode(mode) {
+  if (mode === 'INP') {
+    if (state.LAST.json) drawGeometry(state.LAST.json);
+    document.getElementById('legend-results').style.display = 'none';
+    document.getElementById('legend-diffs').style.display = 'block';
+  } else {
+    document.getElementById('legend-results').style.display = 'block';
+    document.getElementById('legend-diffs').style.display = 'none';
+  }
+}
+
+export function updateMapMetricOptions(section) {
+  if (state.UI_MODE !== 'RESULTS') return;
+  drawResults(section);
+}
+
+function updateResultLegend(config) {
+  const cont = document.getElementById('legend-results');
+  if (!cont) return;
+
+  // Clear generic items
+  cont.innerHTML = `<div class="legend-title">Results: ${state.LAST.currentSection}</div>`;
+
+  if (!config) {
+    cont.innerHTML += `<div class="lg-item" style="color:#888;font-style:italic">No visualization rules.</div>`;
+    return;
+  }
+
+  config.buckets.forEach(b => {
+    cont.innerHTML += `<div class="lg-item"><span class="lg-swatch" style="background:${b.color}"></span> ${b.label}</div>`;
+  });
+
+  cont.innerHTML += `<div class="lg-item"><span class="lg-swatch" style="background:#bdc3c7"></span> No Change / Not in Report</div>`;
+}
+
+function drawResults(section) {
+  const tableConfig = RESULT_CONFIG[section];
+
+  // Update Legend
+  updateResultLegend(tableConfig);
+
+  const resJson = state.LAST.resultJson;
+  const inpJson = state.LAST.json;
+  if (!resJson || !inpJson) return;
+
+  resetLayers();
+
+  // Draw BASE GEOMETRY (Gray) for everything
+  drawBaseGeometry(inpJson.geometry, section);
+
+  // If no config or data, we stop here (just showing base map)
+  const secData = resJson.sections.find(s => s.section === section);
+  if (!secData || !tableConfig) return;
+
+  const g = inpJson.geometry;
+
+  secData.rows.forEach(r => {
+    const id = r[secData.id_col];
+
+    // IGNORE one-sided results (visualize as base-grey)
+    if (r.Status === 'ONLY_IN_A' || r.Status === 'ONLY_IN_B') return;
+
+    // Parse value difference from COMPUTED column
+    // The metric name in config now MATCHES the column name in table (e.g. "% Diff ...")
+    let metricVal = r[tableConfig.metric];
+    if (metricVal === undefined) return;
+
+    let diff = parseFloat(metricVal);
+    if (isNaN(diff)) return;
+
+    // Determine Bucket
+    let bucket = null;
+    let absDiff = Math.abs(diff);
+
+    // Filter small noise
+    if (absDiff <= 1e-6) return; // No change
+
+    if (tableConfig.type === 'threshold') {
+      if (absDiff <= tableConfig.threshold) bucket = tableConfig.buckets[0];
+      else bucket = tableConfig.buckets[1];
+    } else {
+      // Percent or Absolute: check against max
+      bucket = tableConfig.buckets.find(b => absDiff < b.max);
+    }
+
+    if (!bucket) return;
+
+    // Draw Overlay
+    const t = secType(section);
+    const color = bucket.color;
+
+    // Pass 'r' (the whole row) to popup so it can extract other info if needed?
+    // The popup function signature needs to change to accept 'r'. 
+    const popupContent = getPopupContentForResult(r, id, section, diff, tableConfig);
+
+    let layer = null;
+    if (t === 'nodes') {
+      const xy = g.nodes2?.[id] || g.nodes1?.[id];
+      if (xy) {
+        const r = bucket.radius || 5;
+        layer = L.circleMarker(xyToLatLng(xy[0], xy[1]), {
+          radius: r, color: "#000", weight: 1, fillColor: color, fillOpacity: 1, pane: 'nodePane'
+        }).addTo(layers.nodes.changed);
+      }
+    } else if (t === 'links') {
+      const latlngs = g.links2?.[id] || g.links1?.[id];
+      if (latlngs) {
+        const w = bucket.weight || 3;
+        const ll = coordsToLatLng(latlngs);
+        layer = L.polyline(ll, { color: color, weight: w, opacity: 1, pane: 'linkPane' })
+          .addTo(layers.links.changed);
+      }
+    } else if (t === 'subs') {
+      const poly = g.subs2?.[id] || g.subs1?.[id];
+      if (poly) {
+        const w = bucket.weight || 2;
+        layer = L.polygon(coordsToLatLng(poly), { color: color, weight: w, fill: false, pane: 'subcatchmentPane' })
+          .addTo(layers.subs.changed);
+      }
+    }
+
+    if (layer) {
+      layer.swmmInfo = { id, section, type: t };
+      layer.bindPopup(popupContent);
+    }
+  });
+
+  throttledDrawLabels();
+}
+
+function drawBaseGeometry(g, section) {
+  const nodeIds = new Set([...Object.keys(g.nodes1 || {}), ...Object.keys(g.nodes2 || {})]);
+  const linkIds = new Set([...Object.keys(g.links1 || {}), ...Object.keys(g.links2 || {})]);
+  const subIds = new Set([...Object.keys(g.subs1 || {}), ...Object.keys(g.subs2 || {})]);
+
+  const gray = "#bdc3c7";
+
+  nodeIds.forEach(id => {
+    const xy = g.nodes2[id] || g.nodes1[id];
+    if (xy) {
+      L.circleMarker(xyToLatLng(xy[0], xy[1]), {
+        radius: 3, color: "#000", weight: 0.5, fillColor: gray, fillOpacity: 1, pane: 'nodePane'
+      }).addTo(layers.nodes.unchanged); // Using unchanged group as base container
+    }
+  });
+
+  linkIds.forEach(id => {
+    const pts = g.links2[id] || g.links1[id];
+    if (pts) {
+      L.polyline(coordsToLatLng(pts), { color: gray, weight: 3, opacity: 1, pane: 'linkPane' })
+        .addTo(layers.links.unchanged);
+    }
+  });
+
+  subIds.forEach(id => {
+    const pts = g.subs2[id] || g.subs1[id];
+    if (pts) {
+      L.polygon(coordsToLatLng(pts), { color: gray, weight: 1, fill: false, pane: 'subcatchmentPane' })
+        .addTo(layers.subs.unchanged);
+    }
+  });
+}
+
+function getPopupContentForResult(row, id, section, diff, config) {
+  const units = config.unit || "";
+  // Config metric name is now the COMPUTED column name
+
+  let diffDisplay = "";
+  if (config.type === 'percent') diffDisplay = `${diff.toFixed(2)}%`;
+  else diffDisplay = `${diff.toFixed(3)} ${units}`;
+
+  return `
+      <div style="font-weight:bold">${id}</div>
+      <div style="font-size:11px;color:#666">${section}</div>
+      <hr style="margin:4px 0;border:0;border-top:1px solid #ddd"/>
+      <div style="font-size:11px;font-weight:bold">${config.metric}</div>
+      <div style="margin-top:4px;font-weight:bold;color:${diff > 0 ? '#e74c3c' : (diff < 0 ? '#2ecc71' : '#f39c12')}">
+        Value: ${diffDisplay}
+      </div>
+    `;
+}
+
+
+
+

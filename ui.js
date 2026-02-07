@@ -11,7 +11,7 @@
 
 import { state } from './state.js';
 import { abToB64, b64ToAb, escapeHtml, relabelHeaders } from './utils.js';
-import { renderSections } from './table.js';
+import { renderSections, renderSectionList } from './table.js';
 import { drawGeometry } from './map.js';
 
 // ==============================================================================
@@ -641,4 +641,41 @@ export function openCompareModal() {
 export function closeCompareModal() {
   document.getElementById('compareModalBackdrop').style.display = 'none';
 }
+
+
+// ==============================================================================
+// SECTION 7: TABS & VIEW SWITCHING
+// ==============================================================================
+
+export function switchTab(mode) {
+  // mode: 'INP' or 'RESULTS'
+  state.UI_MODE = mode;
+
+  // Update Tab Styling
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById(mode === 'INP' ? 'tabInp' : 'tabRes').classList.add('active');
+
+  // Update Sidebar (Sections)
+  renderSectionList();
+
+
+  // Update Filters visibility
+  const inpFilters = document.getElementById('filter-group-inp');
+  if (mode === 'RESULTS') {
+    inpFilters.style.display = 'none';
+  } else {
+    inpFilters.style.display = 'flex';
+  }
+
+  // Clear Detail View
+  document.getElementById('table').innerHTML = "";
+  document.getElementById('currentSectionLabel').textContent = "";
+
+  // Clear Map or Reset Map Mode
+  import('./map.js').then(mod => mod.setMapMode(mode));
+}
+
+// Make globally available for onclick events in HTML
+window.switchTab = switchTab;
+
 
