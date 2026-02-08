@@ -51,20 +51,20 @@ export function renderSections(json) {
     const changed = Object.keys(d.changed || {}).length;
     items.push({ sec, added, removed, changed });
   }
-  if (!items.length) { cont.textContent = "No sections with differences."; return; }
+  if (!items.length) { cont.innerHTML = '<div style="padding:16px;text-align:center;color:var(--text-tertiary);">No differences found.</div>'; return; }
   cont.innerHTML = "";
   items.forEach(({ sec, added, removed, changed }) => {
     const div = document.createElement('div');
-    div.className = 'sec';
+    div.className = 'sec-item';
     div.dataset.sec = sec;
     div.innerHTML = `<span>${sec}</span>
-      <span class="counts">
-        <span class="pill added">+${added}</span>
-        <span class="pill removed">-${removed}</span>
-        <span class="pill changed">⚙${changed}</span>
+      <span class="sec-counts">
+        ${added > 0 ? `<span class="badge added" title="Added" style="font-size:10px; border-radius:10px; padding:1px 6px;">+${added}</span>` : ''}
+        ${removed > 0 ? `<span class="badge removed" title="Removed" style="font-size:10px; border-radius:10px; padding:1px 6px;">-${removed}</span>` : ''}
+        ${changed > 0 ? `<span class="badge changed" title="Changed" style="font-size:10px; border-radius:10px; padding:1px 6px;">~${changed}</span>` : ''}
       </span>`;
     div.onclick = () => {
-      document.querySelectorAll('.sec').forEach(n => n.classList.remove('active'));
+      document.querySelectorAll('.sec-item').forEach(n => n.classList.remove('active'));
       div.classList.add('active');
       state.LAST.currentSection = sec;
       document.getElementById('currentSectionLabel').textContent = sec;
@@ -118,16 +118,16 @@ export function renderTableFor(sec) {
     const body = [];
     for (const r of filtered) {
       const type = r.changeType === "Added" || r.changeType === "Removed" ? r.changeType : "Changed";
-      const pill = type.toLowerCase();
-      let tr = `<tr class="row" data-hydro="${escapeHtml(r.hydro)}" data-month="${escapeHtml(r.month)}">`;
+      const badge = type.toLowerCase();
+      let tr = `<tr data-hydro="${escapeHtml(r.hydro)}" data-month="${escapeHtml(r.month)}">`;
       tr += `<td>${escapeHtml(`${r.hydro} ${r.month}`)}</td>`;
-      tr += `<td><span class="pill ${pill}">${type}</span></td>`;
+      tr += `<td><span class="badge ${badge}">${type}</span></td>`;
       tr += `<td>${escapeHtml(r.hydro)}</td><td>${escapeHtml(r.month)}</td><td>${escapeHtml(r.changeType)}</td>`;
       tr += `</tr>`;
       body.push(tr);
     }
 
-    table.innerHTML = thead + `<tbody>${body.join("") || `<tr><td colspan="${hdrs.length + 2}" style="color:#666;font-style:italic;">No rows match.</td></tr>`}</tbody>`;
+    table.innerHTML = thead + `<tbody>${body.join("") || `<tr><td colspan="${hdrs.length + 2}" style="color:var(--text-tertiary);font-style:italic;padding:12px;">No rows match.</td></tr>`}</tbody>`;
 
     table.querySelectorAll('tbody tr').forEach((tr) => {
       const hydro = tr.dataset.hydro;
@@ -256,10 +256,10 @@ export function renderTableFor(sec) {
 
   const tbodyParts = [];
   for (const r of filt) {
-    const pill = r.type.toLowerCase();
-    let tr = `<tr class="row">`;
+    const badge = r.type.toLowerCase();
+    let tr = `<tr>`;
     tr += `<td>${escapeHtml(r.id)}</td>`;
-    tr += `<td><span class="pill ${pill}">${r.type}</span></td>`;
+    tr += `<td><span class="badge ${badge}">${r.type}</span></td>`;
 
     const len = hdrsLabeled.length;
     let oldA, newA;
@@ -286,33 +286,33 @@ export function renderTableFor(sec) {
         const newRim = r.diffs?.RimElevation_new;
 
         if (r.type === "Added") {
-          tr += `<td class="addedCell">${fmtNum(newRim)}</td>`;
+          tr += `<td style="color:var(--added)">${fmtNum(newRim)}</td>`;
         } else if (r.type === "Removed") {
-          tr += `<td class="removedCell">${fmtNum(oldRim)}</td>`;
+          tr += `<td style="color:var(--removed)">${fmtNum(oldRim)}</td>`;
         } else {
           tr += (fmtNum(oldRim) !== fmtNum(newRim))
-            ? `<td><span class="diff">${fmtNum(oldRim)} <span class="arrow">→</span> ${fmtNum(newRim)}</span></td>`
+            ? `<td><span style="opacity:0.6;font-size:0.9em;">${fmtNum(oldRim)}</span> → <span>${fmtNum(newRim)}</span></td>`
             : `<td>${fmtNum(newRim)}</td>`;
         }
       } else {
         const ov = oldA[i] ?? "";
         const nv = newA[i] ?? "";
-        if (r.type === "Added") tr += `<td class="addedCell">${escapeHtml(nv)}</td>`;
-        else if (r.type === "Removed") tr += `<td class="removedCell">${escapeHtml(ov)}</td>`;
+        if (r.type === "Added") tr += `<td style="color:var(--added)">${escapeHtml(nv)}</td>`;
+        else if (r.type === "Removed") tr += `<td style="color:var(--removed)">${escapeHtml(ov)}</td>`;
         else tr += (ov !== nv)
-          ? `<td><span class="diff">${escapeHtml(ov)} <span class="arrow">→</span> ${escapeHtml(nv)}</span></td>`
+          ? `<td><span style="opacity:0.6;font-size:0.9em;">${escapeHtml(ov)}</span> → <span>${escapeHtml(nv)}</span></td>`
           : `<td>${escapeHtml(nv)}</td>`;
       }
     }
 
     if (showDiffs) {
       if (sec === 'CONDUITS') {
-        tr += `<td class="cell-changed">${fmtNum(r.diffs?.Length)}</td>`;
-        tr += `<td class="cell-changed">${fmtNum(r.diffs?.InOffset)}</td>`;
-        tr += `<td class="cell-changed">${fmtNum(r.diffs?.OutOffset)}</td>`;
+        tr += `<td>${fmtNum(r.diffs?.Length)}</td>`;
+        tr += `<td>${fmtNum(r.diffs?.InOffset)}</td>`;
+        tr += `<td>${fmtNum(r.diffs?.OutOffset)}</td>`;
       } else if (sec === 'JUNCTIONS') {
-        tr += `<td class="cell-changed">${fmtNum(r.diffs?.InvertElev)}</td>`;
-        tr += `<td class="cell-changed">${fmtNum(r.diffs?.MaxDepth)}</td>`;
+        tr += `<td>${fmtNum(r.diffs?.InvertElev)}</td>`;
+        tr += `<td>${fmtNum(r.diffs?.MaxDepth)}</td>`;
       }
     }
 
@@ -321,7 +321,7 @@ export function renderTableFor(sec) {
   }
 
   const totalCols = hdrsLabeled.length + diffHeaders.length + 2;
-  table.innerHTML = thead + `<tbody>${tbodyParts.join("") || `<tr><td colspan="${totalCols}" style="color:#666;font-style:italic;">No rows match.</td></tr>`}</tbody>`;
+  table.innerHTML = thead + `<tbody>${tbodyParts.join("") || `<tr><td colspan="${totalCols}" style="color:var(--text-tertiary);font-style:italic;padding:12px;">No rows match.</td></tr>`}</tbody>`;
 
   table.querySelectorAll('tbody tr').forEach((tr) => {
     const id = tr.children[0]?.textContent || "";
@@ -339,4 +339,3 @@ export function renderTableFor(sec) {
     renderTableFor(state.LAST.currentSection);
   });
 });
-

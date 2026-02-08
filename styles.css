@@ -1,111 +1,96 @@
 /* ========================================================================
    0. THEME TOKENS (COLORS, RADIUS, SHADOWS)
-   ------------------------------------------------------------------------
-   - Centralize all colors here so the look can be changed in one place.
-   - Accent color can be swapped if you want a different main highlight.
-   ======================================================================== */
+   ------------------------------------------------------------------------ */
 
 :root {
-  /* Brand & accent */
-  --accent: #cdd2d6;
-  /* Default (dark mode) accent */
-  --accent-soft: rgba(77, 171, 247, 0.25);
-  --accent-soft-hover: rgba(77, 171, 247, 0.2);
+  /* Brand & Accent - Vibrant Indigo/Blue */
+  --primary: #6366f1;
+  --primary-hover: #4f46e5;
+  --primary-light: rgba(99, 102, 241, 0.1);
+  --on-primary: #ffffff;
 
-  /* Status colors */
-  --added: #66bb6a;
-  --removed: #ef5350;
-  --changed: #ffa726;
-  --muted: #9e9e9e;
+  /* Status Colors (Modern & Accessible) */
+  --added: #10b981;
+  /* Emerald-500 */
+  --removed: #ef4444;
+  /* Red-500 */
+  --changed: #f59e0b;
+  /* Amber-500 */
 
-  --added-bg: rgba(102, 187, 106, 0.16);
-  --removed-bg: rgba(239, 83, 80, 0.16);
-  --changed-bg: rgba(255, 167, 38, 0.16);
+  --added-bg: rgba(16, 185, 129, 0.1);
+  --removed-bg: rgba(239, 68, 68, 0.1);
+  --changed-bg: rgba(245, 158, 11, 0.1);
 
-  --added-border: rgba(129, 199, 132, 0.7);
-  --removed-border: rgba(239, 154, 154, 0.7);
-  --changed-border: rgba(255, 183, 77, 0.7);
+  --added-border: rgba(16, 185, 129, 0.3);
+  --removed-border: rgba(239, 68, 68, 0.3);
+  --changed-border: rgba(245, 158, 11, 0.3);
 
-  /* Surfaces (dark theme stack) */
-  --bg-root: #121212;
-  --bg-gradient: radial-gradient(circle at top left, #202020 0, #050505 55%, #000 100%);
-  --bg-elev-1: #181818;
-  --bg-elev-2: #1e1e1e;
-  --bg-elev-3: #252525;
-  --bg-header: rgba(20, 20, 20, 0.9);
-  --bg-shading-even: #191919;
-  --bg-shading-hover: #222222;
+  /* Light Theme Surfaces (Default) */
+  --bg-body: #f3f4f6;
+  /* Gray-100 */
+  --bg-surface: #ffffff;
+  /* White */
+  --bg-surface-hover: #f9fafb;
+  /* Gray-50 */
+  --bg-panel: #ffffff;
+  --bg-header: rgba(255, 255, 255, 0.85);
 
-  /* Text */
-  --text-strong: #f5f5f5;
-  --text-normal: #e0e0e0;
-  --text-subtle: #b0b0b0;
-  --text-inverse: #000000;
-  /* Text on accent color */
-
-  /* Borders & outlines */
-  --border-soft: #333333;
-  --border-strong: #444444;
-  --border-glass: rgba(255, 255, 255, 0.04);
-
-  /* Radii / shadows */
-  --radius-panel: 12px;
-  --radius-pill: 999px;
-  --shadow-soft: 0 0 18px rgba(0, 0, 0, 0.55);
-  --shadow-hard: 0 0 30px rgba(0, 0, 0, 0.75);
-
-  /* Map */
-  --map-bg: #000;
-}
-
-[data-theme="light"] {
-  /* Brand & accent */
-  --accent: #727cf5;
-  /* A pleasant bluish-purple for light mode */
-  --accent-soft: rgba(114, 124, 245, 0.15);
-  --accent-soft-hover: rgba(114, 124, 245, 0.1);
-
-  /* Status colors - slightly darker for contrast on white */
-  --added: #2e7d32;
-  --removed: #c62828;
-  --changed: #ef6c00;
-  --muted: #757575;
-
-  --added-bg: rgba(46, 125, 50, 0.1);
-  --removed-bg: rgba(198, 40, 40, 0.1);
-  --changed-bg: rgba(239, 108, 0, 0.1);
-
-  --added-border: rgba(46, 125, 50, 0.3);
-  --removed-border: rgba(198, 40, 40, 0.3);
-  --changed-border: rgba(239, 108, 0, 0.3);
-
-  /* Surfaces (light theme stack) */
-  --bg-root: #f8f9fa;
-  --bg-gradient: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
-  --bg-elev-1: #ffffff;
-  --bg-elev-2: #ffffff;
-  --bg-elev-3: #f1f3f5;
-  --bg-header: rgba(255, 255, 255, 0.9);
-  --bg-shading-even: #f8f9fa;
-  --bg-shading-hover: #e9ecef;
-
-  /* Text */
-  --text-strong: #212529;
-  --text-normal: #343a40;
-  --text-subtle: #6c757d;
+  /* Text Colors */
+  --text-main: #111827;
+  /* Gray-900 */
+  --text-secondary: #4b5563;
+  /* Gray-600 */
+  --text-tertiary: #9ca3af;
+  /* Gray-400 */
   --text-inverse: #ffffff;
 
-  /* Borders & outlines */
-  --border-soft: #dee2e6;
-  --border-strong: #ced4da;
-  --border-glass: rgba(0, 0, 0, 0.05);
+  /* Borders & Dividers */
+  --border-light: #e5e7eb;
+  /* Gray-200 */
+  --border-medium: #d1d5db;
+  /* Gray-300 */
 
-  /* Radii / shadows */
-  --shadow-soft: 0 2px 8px rgba(0, 0, 0, 0.05);
-  --shadow-hard: 0 5px 15px rgba(0, 0, 0, 0.1);
+  /* Shadows */
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
 
-  /* Map */
-  --map-bg: #e9ecef;
+  /* Layout */
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --header-height: 60px;
+}
+
+[data-theme="dark"] {
+  /* Dark Theme Surfaces */
+  --bg-body: #0f172a;
+  /* Slate-900 */
+  --bg-surface: #1e293b;
+  /* Slate-800 */
+  --bg-surface-hover: #334155;
+  /* Slate-700 */
+  --bg-panel: #1e293b;
+  --bg-header: rgba(30, 41, 59, 0.85);
+
+  /* Text Colors */
+  --text-main: #f8fafc;
+  /* Slate-50 */
+  --text-secondary: #cbd5e1;
+  /* Slate-300 */
+  --text-tertiary: #94a3b8;
+  /* Slate-400 */
+
+  /* Borders */
+  --border-light: #334155;
+  /* Slate-700 */
+  --border-medium: #475569;
+  /* Slate-600 */
+
+  /* Status Adjustments for Dark Mode */
+  --added-bg: rgba(16, 185, 129, 0.15);
+  --removed-bg: rgba(239, 68, 68, 0.15);
+  --changed-bg: rgba(245, 158, 11, 0.15);
 }
 
 /* ========================================================================
@@ -119,224 +104,234 @@
 html,
 body {
   height: 100%;
-}
-
-body {
   margin: 0;
-  font-family: Segoe UI, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  padding: 0;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   font-size: 14px;
-  color: var(--text-normal);
-  background: var(--bg-gradient);
-  letter-spacing: 0.1px;
+  color: var(--text-main);
+  background: var(--bg-body);
+  transition: background-color 0.2s ease, color 0.2s ease;
+  overflow: hidden;
+  /* App-like feel */
 }
 
 /* ========================================================================
-   2. TOP HEADER (APP BAR)
-   ------------------------------------------------------------------------
-   - Glassy dark bar with accent interactions.
+   2. LAYOUT & GRID
    ======================================================================== */
 
+#app-container {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  /* Fixed Sidebar, Flexible Main */
+  grid-template-rows: var(--header-height) 1fr;
+  grid-template-areas:
+    "header header"
+    "sidebar main";
+  height: 100vh;
+  width: 100vw;
+}
+
+/* Header */
 header {
+  grid-area: header;
+  background: var(--bg-header);
+  border-bottom: 1px solid var(--border-light);
+  backdrop-filter: blur(12px);
+  padding: 0 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  z-index: 1100;
+  box-shadow: var(--shadow-sm);
+}
+
+/* Sidebar */
+#sidebar {
+  grid-area: sidebar;
+  background: var(--bg-surface);
+  border-right: 1px solid var(--border-light);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  z-index: 40;
+}
+
+/* Main Content (Table + Map) */
+#main-content {
+  grid-area: main;
+  display: flex;
+  flex-direction: column;
+  /* Or grid if we split top/bottom or left/right */
+  overflow: hidden;
+  position: relative;
+  background: var(--bg-body);
+}
+
+/* Drag Handles (Splitters) */
+.gutter {
+  background: var(--border-light);
+  transition: background 0.2s;
+  z-index: 100;
+}
+
+.gutter:hover,
+.gutter:active {
+  background: var(--primary);
+}
+
+.gutter.gutter-horizontal {
+  cursor: col-resize;
+}
+
+.gutter.gutter-vertical {
+  cursor: row-resize;
+}
+
+/* ========================================================================
+   3. HELPER COMPONENTS (Buttons, Inputs, etc.)
+   ======================================================================== */
+
+button,
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 16px;
+  border-radius: var(--radius-md);
+  font-weight: 500;
+  font-size: 13px;
+  cursor: pointer;
+  border: 1px solid var(--border-medium);
+  background: var(--bg-surface);
+  color: var(--text-main);
+  transition: all 0.15s ease;
+  gap: 6px;
+}
+
+button:hover {
+  background: var(--bg-surface-hover);
+  border-color: var(--text-tertiary);
+  transform: translateY(-1px);
+}
+
+button:active {
+  transform: translateY(0);
+}
+
+button.primary {
+  background: var(--primary);
+  color: var(--on-primary);
+  border-color: transparent;
+  box-shadow: 0 2px 4px rgba(99, 102, 241, 0.3);
+}
+
+button.primary:hover {
+  background: var(--primary-hover);
+  box-shadow: 0 4px 6px rgba(99, 102, 241, 0.4);
+}
+
+button.icon-btn {
+  padding: 8px;
+  border-radius: 50%;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+}
+
+button.icon-btn:hover {
+  background: var(--bg-surface-hover);
+  color: var(--primary);
+}
+
+/* Inputs & Selects */
+input[type="text"],
+input[type="number"],
+select {
+  padding: 8px 12px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-medium);
+  background: var(--bg-surface);
+  color: var(--text-main);
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.15s box-shadow 0.15s;
+}
+
+input[type="text"]:focus,
+select:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-light);
+}
+
+/* ========================================================================
+   4. HEADER ELEMENTS
+   ======================================================================== */
+
+.app-brand {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 0 18px;
-  height: 50px;
-  background: var(--bg-header);
-  color: var(--text-strong);
-  border-bottom: 1px solid var(--border-soft);
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.2);
-  backdrop-filter: blur(14px);
 }
 
-h1 {
-  margin: 0;
+.app-brand img {
+  height: 32px;
+  width: 32px;
+  border-radius: 6px;
+}
+
+.app-brand h1 {
   font-size: 18px;
-  color: var(--text-strong);
+  font-weight: 600;
+  margin: 0;
+  color: var(--text-main);
 }
 
-header img {
-  height: 36px;
-  width: 36px;
-  border-radius: 8px;
+.app-brand .tag {
+  font-size: 10px;
+  background: var(--primary-light);
+  color: var(--primary);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
-/* App title + icon + help button */
-#app-title-group {
-  margin-left: auto;
+.header-actions {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
 }
 
-
-
-/* ========================================================================
-   3. LAYOUT GRID (LEFT SECTIONS + RIGHT TABLE/MAP)
-   ======================================================================== */
-
-#wrap {
-  display: grid;
-  grid-template-columns: 320px 6px 1fr;
-  gap: 0;
-  padding: 12px;
-  height: calc(100vh - 51px);
-  min-height: 0;
-}
-
-#left,
-#right {
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-}
-
-/* Splitter bars between panels */
-.splitter {
-  background: var(--bg-elev-3);
-}
-
-.v-splitter {
-  cursor: col-resize;
-}
-
-.h-splitter {
-  cursor: row-resize;
-}
-
-.v-splitter:hover,
-.h-splitter:hover {
-  background: var(--accent);
-}
-
-body.resizing-v {
-  cursor: col-resize;
-  user-select: none;
-}
-
-body.resizing-h {
-  cursor: row-resize;
-  user-select: none;
-}
-
-/* Nested splitter between table and map */
-#detailsWrap {
-  display: grid;
-  grid-template-columns: 1fr 6px 45%;
-  gap: 0;
-  min-height: 0;
-}
-
-#tableWrap {
-  flex: 1;
-  min-width: 0;
-  min-height: 0;
-}
-
-/* ========================================================================
-   4. PANELS (LEFT SECTIONS, TABLE CARD, MAP CARD)
-   ======================================================================== */
-
-.panel {
-  border-radius: var(--radius-panel);
-  background: var(--bg-elev-2);
-  border: 1px solid var(--border-glass);
-  box-shadow: var(--shadow-soft);
-  padding: 10px;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-}
-
-.panel h3 {
-  margin: 0 0 8px 0;
-  font-size: 14px;
-  color: var(--text-strong);
-}
-
-#summaryPanel,
-#sectionsPanel {
-  overflow: auto;
-}
-
-#summary,
-#sections {
-  overflow: auto;
-  min-height: 0;
-}
-
-/* ========================================================================
-   5. SECTIONS LIST (LEFT NAV FOR SWMM SECTIONS)
-   ======================================================================== */
-
-#sections .sec {
-  padding: 6px 8px;
-  border-radius: 8px;
-  cursor: pointer;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  transition: background 0.12s ease, transform 0.12s ease, box-shadow 0.12s ease;
-}
-
-#sections .sec:hover {
-  background: var(--bg-elev-3);
-  transform: translateY(-1px);
-  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.4);
-}
-
-#sections .sec.active {
-  background: var(--accent-soft);
-  border: 1px solid var(--accent);
-  box-shadow: 0 0 0 1px rgba(77, 171, 247, 0.3);
-}
-
-.counts {
-  font-size: 12px;
-  color: var(--text-subtle);
-}
-
-/* ========================================================================
-   6. MENUS, BUTTONS, TOP FILTER BAR
-   ======================================================================== */
-
-/* File / Map drop-down menus */
+/* DROPDOWN MENUS */
 .menu {
   position: relative;
-}
-
-.menu-btn {
-  padding: 6px 12px;
-  border-radius: var(--radius-pill);
-  cursor: pointer;
-  font-weight: 500;
-  color: var(--text-strong);
-  border: 1px solid transparent;
-  background: transparent;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.menu-btn:hover {
-  background-color: var(--border-glass);
-  border-color: var(--border-soft);
-  color: var(--accent);
+  display: inline-block;
 }
 
 .menu-content {
   display: none;
   position: absolute;
-  top: 100%;
-  left: 0;
-  background: var(--bg-elev-2);
-  border: 1px solid var(--border-soft);
-  box-shadow: var(--shadow-hard);
-  border-radius: 8px;
-  color: var(--text-normal);
-  min-width: 220px;
+  background-color: var(--bg-surface);
+  min-width: 160px;
+  box-shadow: var(--shadow-lg);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-light);
   z-index: 1000;
-  padding: 4px;
+  top: 100%;
+  padding: 6px 0;
+  margin-top: 6px;
+  /* Right align default */
+  right: 0;
+}
+
+.menu-content::before {
+  content: '';
+  position: absolute;
+  top: -6px;
+  left: 0;
+  width: 100%;
+  height: 6px;
 }
 
 .menu:hover .menu-content {
@@ -344,613 +339,322 @@ body.resizing-h {
 }
 
 .menu-item {
-  display: block;
   width: 100%;
   text-align: left;
-  padding: 8px 12px;
+  padding: 8px 16px;
   border: none;
   background: none;
-  cursor: pointer;
-  border-radius: 6px;
   font-size: 13px;
-  color: var(--text-normal);
+  color: var(--text-main);
+  border-radius: 0;
+  display: block;
 }
 
 .menu-item:hover {
-  background-color: var(--accent-soft-hover);
-  color: var(--accent);
+  background-color: var(--bg-surface-hover);
+  transform: none;
+  /* Override btn transform */
 }
 
-.menu-content hr {
-  border: none;
-  border-top: 1px solid var(--border-soft);
+hr {
+  border: 0;
+  border-top: 1px solid var(--border-light);
   margin: 4px 0;
 }
 
-.menu-content label {
-  display: block;
-  padding: 8px 12px;
-  color: var(--text-subtle);
-  font-size: 13px;
+
+/* ========================================================================
+   5. SIDEBAR (SECTIONS)
+   ======================================================================== */
+
+.sidebar-header {
+  padding: 16px;
+  border-bottom: 1px solid var(--border-light);
+  background: rgba(0, 0, 0, 0.02);
 }
 
-/* All generic buttons */
-button {
-  padding: 8px 14px;
-  border-radius: var(--radius-pill);
-  border: 1px solid var(--border-soft);
-  background: var(--bg-elev-3);
-  cursor: pointer;
-  font-size: 14px;
-  color: var(--text-strong);
-  transition: background 0.12s ease, color 0.12s ease, box-shadow 0.12s ease, transform 0.08s ease;
-}
-
-button:hover {
-  background: var(--border-glass);
-  box-shadow: 0 0 0 1px var(--border-glass);
-  transform: translateY(-0.5px);
-}
-
-/* Primary CTA (Run Comparison) */
-button.primary {
-  background: var(--accent);
-  color: var(--text-inverse);
-  border-color: var(--accent);
-  font-weight: 600;
-
-}
-
-button.primary:hover {
-  background: #67befb;
-}
-
-/* Header-specific primaries, if any */
-header button.primary {
-  background: var(--accent);
-  color: var(--text-inverse);
-}
-
-/* Dropdown-like buttons and file labels */
-.dropdown-btn,
-.file-btn-label {
-  padding: 8px 12px;
-  border-radius: var(--radius-pill);
-  border: 1px solid var(--border-strong);
-  background: transparent;
-  color: var(--text-strong);
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 13px;
-}
-
-.dropdown-btn::after {
-  content: "▼";
-  font-size: 8px;
-  opacity: 0.6;
-}
-
-.dropdown-btn:hover,
-.file-btn-label:hover {
-  background-color: var(--border-glass);
-}
-
-/* Filters row above table */
-#filters {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-  flex-wrap: wrap;
-}
-
-#filters label {
-  font-size: 13px;
-  color: var(--text-subtle);
-}
-
-/* Search input */
-#search {
+.sidebar-content {
   flex: 1;
-  min-width: 140px;
-  padding: 6px 8px;
-  border-radius: 8px;
-  border: 1px solid var(--border-soft);
-  background: var(--bg-elev-3);
-  color: var(--text-normal);
+  overflow-y: auto;
+  padding: 12px;
 }
 
-#search::placeholder {
-  color: var(--text-subtle);
-}
-
-/* Status text in header bar */
-#status {
-  color: var(--text-normal);
-  font-size: 13px;
-}
-
-/* ========================================================================
-   7. TABLE (DETAILS GRID)
-   ------------------------------------------------------------------------
-   - Sticky header, dark row banding, diff chips, and numeric alignment.
-   ======================================================================== */
-
-#tableContainer {
-  overflow: auto;
-  height: 100%;
-  border-radius: var(--radius-panel);
-  border: 1px solid var(--border-soft);
-  background: var(--bg-elev-2);
-}
-
-#table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 13px;
-}
-
-/* Header row */
-#table th {
-  background: var(--bg-elev-3);
-  color: var(--text-subtle);
-  padding: 6px 8px;
-  text-align: left;
-  border-bottom: 1px solid var(--border-soft);
-  border-right: 1px solid var(--border-soft);
-  position: sticky;
-  top: 0;
-  z-index: 1;
-}
-
-/* Body cells */
-#table td {
-  padding: 6px 8px;
-  text-align: left;
-  vertical-align: top;
-  border-top: 1px solid var(--bg-root);
-  border-right: 1px solid var(--bg-elev-1);
-  background: var(--bg-elev-2);
-}
-
-/* Alternate row shading */
-#table tbody tr:nth-child(even) td {
-  background: var(--bg-shading-even);
-}
-
-/* Row hover + highlighted state */
-.row {
-  cursor: pointer;
-}
-
-.row:hover td {
-  background: var(--bg-shading-hover);
-}
-
-.row.highlighted td {
-  background: var(--accent-soft) !important;
-}
-
-/* Column-specific helpers */
-.removedCell {
-  color: var(--removed);
-}
-
-.addedCell {
-  color: var(--added);
-}
-
-/* Δ columns (rightmost 3 numeric delta columns) */
-#table th:nth-last-child(-n+3),
-#table td:nth-last-child(-n+3) {
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-}
-
-/* Diff chips inside table (old → new) */
-.diff {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 2px 4px;
-  border-radius: 6px;
-  background: var(--changed-bg);
-  border: 1px solid var(--changed-border);
-  font-variant-numeric: tabular-nums;
-}
-
-.diff .old {
-  opacity: 0.75;
-  text-decoration: line-through;
-}
-
-.diff .arrow {
-  opacity: 0.75;
-  font-size: 11px;
-}
-
-/* Tiny color chip (if used) */
-.chip {
-  display: inline-block;
-  width: 10px;
-  height: 10px;
-  border-radius: 2px;
-  margin-right: 6px;
-  vertical-align: middle;
-}
-
-/* Pills used in sections or elsewhere (Added/Removed/Changed) */
-.pill {
-  padding: 2px 6px;
-  border-radius: var(--radius-pill);
-  font-size: 12px;
-  font-weight: 600;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.pill.added {
-  background: var(--added-bg);
-  color: var(--added);
-  border: 2px solid var(--added-border);
-}
-
-.pill.removed {
-  background: var(--removed-bg);
-  color: var(--removed);
-  border: 2px solid var(--removed-border);
-}
-
-.pill.changed {
-  background: var(--changed-bg);
-  color: var(--changed);
-  border: 2px solid var(--changed-border);
-}
-
-/* ========================================================================
-   8. MAP CANVAS & LEGEND
-   ======================================================================== */
-
-#map {
-  min-width: 0;
-  min-height: 0;
-  border-radius: var(--radius-panel);
-  border: 1px solid var(--border-soft);
-  background: var(--map-bg);
-}
-
-/* Labels drawn via Leaflet's divIcons */
-.map-label {
-  background: transparent;
-  border: none;
-  font-size: 10px;
-  color: #ffffff;
-  white-space: nowrap;
-  text-shadow: 0 0 3px #000, 0 0 3px #000;
-}
-
-/* Map legend */
-.legend {
-  position: absolute;
-  bottom: 12px;
-  left: 12px;
-  padding: 10px 12px;
-  border-radius: 12px;
-  background: var(--bg-header);
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
-  font-size: 12px;
-  color: var(--text-normal);
-  border: 1px solid var(--border-glass);
-}
-
-.legend-title {
-  font-weight: 700;
-  margin-bottom: 6px;
-}
-
-.lg-item {
+/* Section Items */
+.sec-item {
   display: flex;
+  justify-content: space-between;
   align-items: center;
-  gap: 8px;
-  margin: 4px 0;
+  padding: 10px 12px;
+  margin-bottom: 4px;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  color: var(--text-secondary);
+  transition: all 0.15s;
+  border: 1px solid transparent;
 }
 
-.lg-swatch {
-  width: 16px;
+.sec-item:hover {
+  background: var(--bg-surface-hover);
+  color: var(--text-main);
+}
+
+.sec-item.active {
+  background: var(--primary-light);
+  color: var(--primary);
+  border-color: rgba(99, 102, 241, 0.2);
+  font-weight: 600;
+}
+
+.sec-counts {
+  font-size: 11px;
+  opacity: 0.7;
+  display: flex;
+  gap: 6px;
+}
+
+.dot {
+  width: 6px;
   height: 6px;
-  border-radius: 3px;
+  border-radius: 50%;
   display: inline-block;
-  border: 1px solid rgba(0, 0, 0, 0.1);
 }
 
-.lg-unchanged {
-  background: var(--muted);
-}
-
-.lg-changed {
-  background: var(--changed);
-}
-
-.lg-added {
+.dot.added {
   background: var(--added);
 }
 
-.lg-removed {
+.dot.removed {
   background: var(--removed);
 }
 
-.lg-selected {
-  background: #00FFFF;
-  border: 1px solid rgba(0, 255, 255, 0.5);
+.dot.changed {
+  background: var(--changed);
 }
 
 /* ========================================================================
-   9. MODALS (DETAILS, RUN COMPARISON, HELP)
-   ------------------------------------------------------------------------
-   - All modals share the same glassy dark style.
-   - Inline styles in HTML use light backgrounds, so we override with !important.
+   6. MAIN PANEL ELEMENTS (FILTER BAR, TABLE, MAP)
    ======================================================================== */
 
-/* Backdrops */
-#modalBackdrop,
-#compareModalBackdrop,
-#helpModalBackdrop {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.65) !important;
-  display: none;
-  /* toggled via JS */
-  align-items: center;
-  justify-content: center;
-  z-index: 9999;
-}
-
-/* Generic modal shell */
-#modal,
-#compareModal,
-#helpModal {
-  background: var(--bg-elev-2) !important;
-  border-radius: 18px !important;
-  border: 1px solid var(--border-glass) !important;
-  color: var(--text-normal) !important;
-  max-width: 900px;
-  width: 90vw;
-  max-height: 80vh;
-  display: flex;
-  flex-direction: column;
-  box-shadow: var(--shadow-hard);
-}
-
-/* Modal header / body / footer */
-#modal header,
-#compareModal header,
-#helpModal header {
+.toolbar {
+  padding: 12px 16px;
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border-light);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 14px;
-  border-bottom: 1px solid var(--border-soft) !important;
-  border-radius: 18px 18px 0 0;
-  background: var(--bg-elev-3) !important;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 
-#modal h2,
-#compareModal h2,
-#helpModal h2 {
-  margin: 0;
-  font-size: 16px;
-  color: var(--text-strong);
-}
-
-#modal .body,
-#compareModal .body,
-#helpModal .body {
-  padding: 10px 14px;
-  overflow: auto;
-  background: transparent;
-}
-
-#modal .foot,
-#compareModal .foot,
-#helpModal .foot {
+.filter-group {
   display: flex;
-  gap: 8px;
-  justify-content: flex-end;
-  padding: 10px 14px;
-  border-top: 1px solid var(--border-soft) !important;
-  background: var(--bg-elev-1);
+  align-items: center;
+  gap: 16px;
 }
 
-/* Force all modal descendants to use light text on dark bg */
-#modal,
-#modal *,
-#compareModal,
-#compareModal *,
-#helpModal,
-#helpModal * {
-  color: var(--text-normal) !important;
-}
-
-/* Key–value grid in details modal */
-.kv {
-  display: grid;
-  grid-template-columns: 200px 1fr 1fr;
+.checkbox-label {
+  display: flex;
+  align-items: center;
   gap: 6px;
-  /* align-items: start; */
+  font-size: 13px;
+  cursor: pointer;
+  user-select: none;
+  font-weight: 500;
 }
 
-.kv div {
-  padding: 6px 8px;
-  border-bottom: 1px solid var(--border-soft);
+.checkbox-label input {
+  accent-color: var(--primary);
 }
 
-.kv .hdr {
-  font-weight: 600;
-  background: #181818;
+/* Table View */
+#table-container {
+  flex: 1;
+  overflow: auto;
+  background: var(--bg-surface);
+  position: relative;
 }
 
-/* Tag badge in modal */
-.tag {
-  display: inline-block;
-  background: var(--accent-soft);
-  border: 1px solid var(--accent);
-  color: var(--accent);
-  border-radius: var(--radius-pill);
-  padding: 2px 8px;
-  font-size: 12px;
-}
-
-/* Hydrograph table inside modal */
-table.modal-hydro {
+table.data-table {
   width: 100%;
-  border-collapse: separate;
-  border-spacing: 0;
-}
-
-table.modal-hydro thead th {
-  background: var(--bg-elev-3);
-  border-bottom: 1px solid var(--border-soft);
-  padding: 8px 10px;
-  text-align: left;
-  position: sticky;
-  top: 0;
-  z-index: 1;
-  color: #c0c0c0;
-}
-
-table.modal-hydro tbody td {
-  padding: 6px 10px;
-  border-top: 1px solid var(--border-soft);
-}
-
-table.modal-hydro tbody tr:nth-child(odd) {
-  background: var(--border-glass);
-}
-
-table.modal-hydro .resp {
-  font-weight: 600;
+  border-collapse: collapse;
+  font-size: 13px;
   white-space: nowrap;
 }
 
-table.modal-hydro .num {
-  font-variant-numeric: tabular-nums;
-  text-align: right;
-  display: inline-block;
-  min-width: 3ch;
-}
-
-table.modal-hydro .delta {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  background: var(--changed-bg);
-  border: 1px solid var(--changed-border);
-  border-radius: 8px;
-  padding: 2px 6px;
-  font-variant-numeric: tabular-nums;
-}
-
-table.modal-hydro .old {
-  opacity: 0.75;
-  text-decoration: line-through;
-}
-
-table.modal-hydro .arrow {
-  opacity: 0.6;
-}
-
-table.modal-hydro .diff {
+table.data-table th {
+  background: var(--bg-body);
+  color: var(--text-secondary);
   font-weight: 600;
+  text-align: left;
+  padding: 10px 12px;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  border-bottom: 2px solid var(--border-light);
 }
 
-table.modal-hydro .plusminus {
-  opacity: 0.7;
+table.data-table td {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border-light);
+  color: var(--text-main);
+}
+
+table.data-table tr:hover td {
+  background: var(--bg-surface-hover);
+}
+
+table.data-table tr.selected td {
+  background: var(--primary-light);
+}
+
+/* Status Badges */
+.badge {
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.badge.added {
+  background: var(--added-bg);
+  color: var(--added);
+  border: 1px solid var(--added-border);
+}
+
+.badge.removed {
+  background: var(--removed-bg);
+  color: var(--removed);
+  border: 1px solid var(--removed-border);
+}
+
+.badge.changed {
+  background: var(--changed-bg);
+  color: var(--changed);
+  border: 1px solid var(--changed-border);
+}
+
+/* Map */
+#map-container {
+  flex: 1;
+  position: relative;
+  min-height: 0;
+}
+
+#map {
+  width: 100%;
+  height: 100%;
+  background: #e5e7eb;
+  /* Fallback */
+}
+
+/* Floating Map Legend */
+.map-legend {
+  position: absolute;
+  bottom: 20px;
+  left: 20px;
+  background: var(--bg-surface);
+  padding: 12px;
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+  z-index: 1000;
+  font-size: 12px;
+  border: 1px solid var(--border-light);
 }
 
 /* ========================================================================
-   10. FILE INPUTS & HELP BUTTON
+   7. MODALS
    ======================================================================== */
 
-input[type="file"] {
-  display: none;
-}
-
-.file-input-container {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.file-name-display {
-  font-size: 12px;
-  color: var(--text-normal);
-  max-width: 180px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* Circular "?" button */
-.help-button {
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  background: transparent;
-  color: var(--text-strong);
-  border: 1px solid rgba(255, 255, 255, 0.5);
-  font-weight: bold;
-  font-size: 16px;
-  line-height: 1;
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(4px);
   display: flex;
   align-items: center;
   justify-content: center;
-  cursor: pointer;
-  padding: 0;
+  z-index: 2000;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s;
 }
 
-.help-button:hover {
-  background: #f5f5f5;
-  color: var(--accent);
+.modal-backdrop.open {
+  opacity: 1;
+  pointer-events: auto;
 }
 
-/* Tolerance numeric inputs */
-.tol-input {
-  width: 100%;
-  margin-top: 4px;
-  padding: 6px;
-  border: 1px solid var(--border-soft);
-  border-radius: 6px;
-  background: var(--bg-elev-3);
-  color: var(--text-normal);
-}
-
-/* Text color for "Run Comparison" button */
-button#runCompareFromModal.primary,
-button#runCompareFromModal.primary:hover {
-  color: #181818 !important;
-}
-
-
-
-/* Help modal list formatting */
-#helpModal .body ul {
-  padding-left: 20px;
-  margin-top: 0;
-}
-
-#helpModal .body li {
-  margin-bottom: 10px;
-}
-
-/* Multiline text cell (for Controls/Rules) */
-.cell-multiline {
-  white-space: pre-wrap;
-  font-family: Consolas, Monaco, 'Courier New', monospace;
-  font-size: 12px;
-  line-height: 1.4;
-  min-width: 300px;
+.modal-content {
+  background: var(--bg-panel);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  width: 90vw;
   max-width: 600px;
-  overflow-x: auto;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  transform: scale(0.95);
+  transition: transform 0.2s;
+  border: 1px solid var(--border-light);
+}
+
+.modal-backdrop.open .modal-content {
+  transform: scale(1);
+}
+
+.modal-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border-light);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.modal-header h2 {
+  font-size: 18px;
+  margin: 0;
+}
+
+.modal-body {
+  padding: 20px;
+  overflow-y: auto;
+}
+
+.modal-footer {
+  padding: 16px 20px;
+  border-top: 1px solid var(--border-light);
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  background: var(--bg-surface-hover);
+  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+}
+
+/* ========================================================================
+   UTILITIES
+   ======================================================================== */
+.hidden {
+  display: none !important;
+}
+
+.flex {
+  display: flex;
+}
+
+.flex-col {
+  display: flex;
+  flex-direction: column;
+}
+
+.flex-1 {
+  flex: 1;
+}
+
+.p-2 {
+  padding: 0.5rem;
+}
+
+.gap-2 {
+  gap: 0.5rem;
 }

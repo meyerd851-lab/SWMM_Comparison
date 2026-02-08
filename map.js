@@ -11,7 +11,6 @@ map.createPane('linkPane').style.zIndex = 390;
 map.createPane('nodePane').style.zIndex = 410;
 
 // Basemap layers
-// Basemap layers
 const baseLayers = {
   "Street": L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     attribution: "&copy; OpenStreetMap"
@@ -19,25 +18,30 @@ const baseLayers = {
   "Aerial": L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
     attribution: 'Tiles &copy; Esri'
   }),
-  "None": L.tileLayer('', { opacity: 0 }) // Dummy layer for "None"
+  "None": L.tileLayer('', { opacity: 0 })
 };
 
 // Default basemap
 baseLayers["Street"].addTo(map);
 
-// Remove manual setBasemap export, let Leaflet handle it via Control
 export function setBasemap(which) {
-  // Compatibility stub if called from elsewhere, but mostly unused now
+  // Compatibility stub
 }
 
-// Add legend control
-map.addControl(new (L.Control.extend({
-  onAdd() { return document.getElementById('legend').content.firstElementChild.cloneNode(true); }
-}))({ position: "bottomleft" }));
+// Add legend control container
+const legendControl = L.Control.extend({
+  onAdd: function () {
+    const lg = L.DomUtil.create('div', 'map-legend legend leaflet-control');
+    lg.id = 'map-legend';
+    // Initial content
+    lg.innerHTML = '<div style="font-weight:700; margin-bottom:8px;">Legend</div>';
+    return lg;
+  }
+});
+map.addControl(new legendControl({ position: "bottomleft" }));
+
 
 // Layer groups
-// Layer groups
-// Parent groups for toggling
 const overlayGroups = {
   nodes: L.layerGroup().addTo(map),
   links: L.layerGroup().addTo(map),
@@ -51,20 +55,28 @@ export const layers = {
   select: L.layerGroup().addTo(map)
 };
 
-export const C = { unchanged: "#7f8c8d", changed: "#f39c12", added: "#2ecc71", removed: "#e74c3c", select: "#00FFFF" };
+export const C = { unchanged: "#9ca3af", changed: "#f59e0b", added: "#10b981", removed: "#ef4444", select: "#00FFFF" };
 
 // --- COORDINATE & GEOMETRY HELPERS ---
 
 export function xyToLatLng(x, y) {
-  const [lon, lat] = proj4(state.CURRENT_CRS, "EPSG:4326", [x, y]);
-  return [lat, lon];
+  // Use projection from state, default to EPSG:4326 if not set (or if raw coords)
+  // Assuming projections are handled by proj4 if loaded
+  if (state.CURRENT_CRS && state.CURRENT_CRS !== "EPSG:4326" && window.proj4) {
+    try {
+      const [lon, lat] = proj4(state.CURRENT_CRS, "EPSG:4326", [x, y]);
+      return [lat, lon];
+    } catch (e) {
+      return [y, x];
+    }
+  }
+  return [y, x];
 }
 
 export function coordsToLatLng(coords) {
   return coords.map(p => xyToLatLng(p[0], p[1]));
 }
 
-// Helper: Calculate midpoint of a line string
 function midOfLine(coords) {
   if (!coords || coords.length === 0) return null;
   if (coords.length === 1) return coords[0];
@@ -89,7 +101,6 @@ function midOfLine(coords) {
   return coords[Math.floor(coords.length / 2)];
 }
 
-// Helper: Calculate centroid of a polygon
 function centroidOfPoly(coords) {
   if (!coords || coords.length === 0) return null;
   let x = 0, y = 0;
@@ -97,7 +108,6 @@ function centroidOfPoly(coords) {
   return [x / coords.length, y / coords.length];
 }
 
-// Helper: Ray-casting algorithm for Point-in-Polygon selection
 function isPointInPoly(pt, poly) {
   let x = pt.lat, y = pt.lng;
   let inside = false;
@@ -111,7 +121,6 @@ function isPointInPoly(pt, poly) {
   return inside;
 }
 
-// Helper: Get closest point on segment in pixels
 function getClosestPointOnSegment(p, a, b) {
   let x = p.x, y = p.y;
   let x1 = a.x, y1 = a.y;
@@ -128,15 +137,12 @@ function getClosestPointOnSegment(p, a, b) {
   return { x: xx, y: yy, t: param, distSq: (x - xx) ** 2 + (y - yy) ** 2 };
 }
 
-// Helper: Check if a click is on a link (pixel-based + middle 80% rule)
 function isClickOnLink(containerPoint, layer, tolerancePx) {
   const pts = layer.getLatLngs();
   const segments = Array.isArray(pts[0]) ? pts : [pts];
 
   for (const line of segments) {
     const pxPoints = line.map(ll => map.latLngToContainerPoint(ll));
-
-    // 1. Calculate total length
     let totalLen = 0;
     const segLens = [];
     for (let i = 0; i < pxPoints.length - 1; i++) {
@@ -144,10 +150,8 @@ function isClickOnLink(containerPoint, layer, tolerancePx) {
       segLens.push(d);
       totalLen += d;
     }
-
     if (totalLen === 0) continue;
 
-    // 2. Find closest point and its station
     let minDstSq = Infinity;
     let bestStation = -1;
     let currentStation = 0;
@@ -161,7 +165,6 @@ function isClickOnLink(containerPoint, layer, tolerancePx) {
       currentStation += segLens[i];
     }
 
-    // 3. Check tolerance and range (10% buffer on each end)
     if (Math.sqrt(minDstSq) <= tolerancePx) {
       const ratio = bestStation / totalLen;
       if (ratio >= 0.1 && ratio <= 0.9) return true;
@@ -204,7 +207,7 @@ const LABEL_ZOOM_THRESHOLD = 17;
 
 export function drawLabels(json) {
   labelsLayer.clearLayers();
-  if (!document.getElementById('labelsToggle').checked) return;
+  if (!document.getElementById('labelsToggle')?.checked) return;
   if (map.getZoom() < LABEL_ZOOM_THRESHOLD) return;
 
   const geom = json.geometry;
@@ -332,7 +335,6 @@ export function drawGeometry(json) {
   if (anyLL.length) map.fitBounds(L.latLngBounds(anyLL), { padding: [20, 20] });
 
   throttledDrawLabels();
-  // Re-apply current filter if any
   setMapFilter(currentFilterMode);
 }
 
@@ -342,10 +344,10 @@ export function highlightElement(section, id, shouldZoom = false) {
   layers.select.clearLayers();
 
   // Highlight table row
-  document.querySelectorAll('#table .row.highlighted').forEach(r => r.classList.remove('highlighted'));
+  document.querySelectorAll('#table tr.selected').forEach(r => r.classList.remove('selected'));
   const safeId = id.replace(/[^a-zA-Z0-9]/g, '_');
   const row = document.querySelector(`#table .row-id-${safeId}`);
-  if (row) { row.classList.add('highlighted'); row.dispatchEvent(new Event('highlight')); }
+  if (row) { row.classList.add('selected'); row.dispatchEvent(new Event('highlight')); }
 
   const t = secType(section);
   if (!t) return;
@@ -397,10 +399,10 @@ function generatePopupContent(section, id) {
   else if (isChanged) changeType = 'Changed';
 
   const renameTo = renames?.[section]?.[id];
-  let html = `<div style="font-weight:bold;font-size:14px;border-bottom:1px solid #eee;padding-bottom:4px;margin-bottom:6px;">${escapeHtml(section)}: ${escapeHtml(id)}</div>`;
-  html += `<div style="margin-bottom:6px;"><span class="pill ${changeType.toLowerCase()}">${changeType}</span>`;
+  let html = `<div style="font-weight:700;font-size:14px;border-bottom:1px solid #e5e7eb;padding-bottom:6px;margin-bottom:8px;">${escapeHtml(section)}: ${escapeHtml(id)}</div>`;
+  html += `<div style="margin-bottom:8px;"><span class="badge ${changeType.toLowerCase()}">${changeType}</span>`;
   if (renameTo) {
-    html += `<span style="margin-left:4px;font-size:12px;color:#555;">(Renamed to ${escapeHtml(renameTo)})</span>`;
+    html += `<span style="margin-left:6px;font-size:12px;color:#6b7280;">(Renamed to ${escapeHtml(renameTo)})</span>`;
   }
   html += `</div>`;
 
@@ -413,7 +415,7 @@ function generatePopupContent(section, id) {
     const newArr = Array.isArray(changedObj) ? changedObj[1] : (changedObj?.values?.[1] || []);
 
     const maxLen = Math.max(oldArr.length, newArr.length);
-    let changesHtml = '<ul style="margin:0;padding-left:18px;font-size:12px;">';
+    let changesHtml = '<ul style="margin:0;padding-left:14px;font-size:12px;">';
     let changeCount = 0;
     for (let i = 0; i < maxLen; i++) {
       const ov = oldArr[i] ?? "";
@@ -427,7 +429,7 @@ function generatePopupContent(section, id) {
     if (changeCount > 0) {
       html += changesHtml + '</ul>';
     } else {
-      html += '<div style="font-size:12px;color:#666;">No parameter changes found.</div>';
+      html += '<div style="font-size:12px;color:#6b7280;">No parameter changes found.</div>';
     }
   }
 
@@ -571,11 +573,14 @@ map.on('click', (e) => {
 map.on('mousemove', throttle((e) => {
   const hit = hasHoverElement(e.latlng);
   document.getElementById('map').style.cursor = hit ? 'pointer' : '';
-}, 40)); // Throttle to 40ms (~25fps) for performance
+}, 40));
 
+// CRS Selection
 document.getElementById('crsSelect').addEventListener('change', (e) => {
   state.CURRENT_CRS = e.target.value;
-  proj4.defs(state.CURRENT_CRS, state.PROJECTIONS[state.CURRENT_CRS]);
+  if (window.proj4) {
+    proj4.defs(state.CURRENT_CRS, state.PROJECTIONS[state.CURRENT_CRS]);
+  }
   state.XY_LATLNG_CACHE.clear();
   if (state.LAST.json) {
     drawGeometry(state.LAST.json);
@@ -646,22 +651,21 @@ export function setMapFilter(mode) {
     });
   });
 
-  // 2. Update Legend
   updateLegend(mode);
 }
 
 function updateLegend(mode) {
-  const legendDiv = document.querySelector('.legend');
+  const legendDiv = document.getElementById('map-legend');
   if (!legendDiv) return;
 
   const buildItem = (colorVar, label) => {
-    return `<div class="lg-item"><span class="lg-swatch" style="background:${colorVar}"></span><span>${label}</span></div>`;
+    return `<div style="display:flex; align-items:center; gap:6px; margin-bottom:4px;"><span class="dot" style="background:${colorVar}"></span> ${label}</div>`;
   };
 
-  let html = `<div class="legend-title">Map Legend</div>`;
+  let html = `<div style="font-weight:700; margin-bottom:8px;">Legend</div>`;
 
   if (mode === 'Default') {
-    html += buildItem('var(--muted)', 'Unchanged');
+    html += buildItem('var(--text-tertiary)', 'Unchanged'); // var(--muted) from old css might not exist, using text-tertiary
     html += buildItem('var(--changed)', 'Changed');
     html += buildItem('var(--added)', 'Added');
     html += buildItem('var(--removed)', 'Removed');
@@ -669,10 +673,10 @@ function updateLegend(mode) {
     // Focus Mode
     const focusColor = (mode === 'Changed') ? 'var(--changed)' : (mode === 'Added' ? 'var(--added)' : 'var(--removed)');
     html += buildItem(focusColor, mode);
-    html += buildItem('var(--muted)', 'Others');
+    html += buildItem('var(--text-tertiary)', 'Others');
   }
 
-  html += `<div class="lg-item"><span class="lg-swatch lg-selected"></span><span>Selected</span></div>`;
+  html += `<div style="display:flex; align-items:center; gap:6px; margin-bottom:4px;"><span class="dot" style="background:#0ff; border:1px solid cyan;"></span> Selected</div>`;
 
   legendDiv.innerHTML = html;
 }
@@ -689,11 +693,10 @@ const overlays = {
 const layersControl = L.control.layers(baseLayers, overlays, { position: 'topright' }).addTo(map);
 
 // Inject the Filter Dropdown into the Layers Control
-(function injectFilterControl() {
-  const container = layersControl.getContainer();
-  const form = container.querySelector('.leaflet-control-layers-list');
-
-  if (!form) return;
+// (Called immediately or on simple timeout to ensure layers control exists)
+setTimeout(() => {
+  const container = document.querySelector('.leaflet-control-layers-list');
+  if (!container || document.getElementById('mapFilterSelect')) return;
 
   const separator = document.createElement('div');
   separator.className = 'leaflet-control-layers-separator';
@@ -709,10 +712,13 @@ const layersControl = L.control.layers(baseLayers, overlays, { position: 'toprig
   wrapper.appendChild(label);
 
   const select = document.createElement('select');
+  select.id = 'mapFilterSelect';
   select.style.width = "100%";
   select.style.padding = "4px";
   select.style.borderRadius = "4px";
-  select.style.border = "1px solid #ccc";
+  select.style.border = "1px solid var(--border-medium)";
+  select.style.background = "var(--bg-surface)";
+  select.style.color = "var(--text-main)";
   select.style.fontSize = "11px";
   select.style.cursor = "pointer";
 
@@ -734,9 +740,9 @@ const layersControl = L.control.layers(baseLayers, overlays, { position: 'toprig
   wrapper.appendChild(select);
 
   // Insert at the top: Wrapper first, then a separator
-  form.prepend(separator);
-  form.prepend(wrapper);
-})();
+  container.prepend(separator);
+  container.prepend(wrapper);
+}, 500);
 
 // Labels Toggle
 document.getElementById('labelsToggle').addEventListener('change', () => {
