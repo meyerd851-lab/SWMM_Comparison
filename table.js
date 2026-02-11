@@ -40,20 +40,40 @@ export function groupHydroSummary(d) {
   return rows;
 }
 
+// --- SECTION GROUPING CONFIGURATION ---
+const SECTION_GROUPS = {
+  Nodes: [
+    "DWF", "INFLOWS", "JUNCTIONS", "OUTFALLS", "RDII", "STORAGE", "DIVIDERS", "TREATMENT", "UNITHYD", "HYDROGRAPHS"
+  ],
+  Links: [
+    "CONDUITS", "PUMPS", "ORIFICES", "WEIRS", "OUTLETS", "XSECTIONS", "TRANSECTS", "STREETS", "INLETS", "INLET_USAGE", "LOSSES"
+  ],
+  Subcatchments: [
+    "SUBCATCHMENTS", "POLLUTANTS", "LANDUSES", "COVERAGES", "BUILDUP", "WASHOFF", "LOADINGS",
+    "GWF", "GROUNDWATER", "INFILTRATION", "LID_CONTROLS", "LID_USAGE"
+  ]
+};
+
 export function renderSections(json) {
   const diffs = json.diffs || {};
   const cont = document.getElementById('sections');
-  const items = [];
-  for (const sec of Object.keys(diffs).sort()) {
+
+  if (!Object.keys(diffs).length) {
+    cont.innerHTML = '<div style="padding:16px;text-align:center;color:var(--text-tertiary);">No differences found.</div>';
+    return;
+  }
+
+  cont.innerHTML = "";
+
+  // Helper to create a section item element
+  const createSecItem = (sec) => {
     const d = diffs[sec];
+    if (!d) return null; // Should not happen if we iterate diffs keys, but safe for fixed lists
+
     const added = Object.keys(d.added || {}).length;
     const removed = Object.keys(d.removed || {}).length;
     const changed = Object.keys(d.changed || {}).length;
-    items.push({ sec, added, removed, changed });
-  }
-  if (!items.length) { cont.innerHTML = '<div style="padding:16px;text-align:center;color:var(--text-tertiary);">No differences found.</div>'; return; }
-  cont.innerHTML = "";
-  items.forEach(({ sec, added, removed, changed }) => {
+
     const div = document.createElement('div');
     div.className = 'sec-item';
     div.dataset.sec = sec;
@@ -63,6 +83,7 @@ export function renderSections(json) {
         ${removed > 0 ? `<span class="badge removed" title="Removed" style="font-size:10px; border-radius:10px; padding:1px 6px;">-${removed}</span>` : ''}
         ${changed > 0 ? `<span class="badge changed" title="Changed" style="font-size:10px; border-radius:10px; padding:1px 6px;">~${changed}</span>` : ''}
       </span>`;
+
     div.onclick = () => {
       document.querySelectorAll('.sec-item').forEach(n => n.classList.remove('active'));
       div.classList.add('active');
@@ -70,9 +91,73 @@ export function renderSections(json) {
       document.getElementById('currentSectionLabel').textContent = sec;
       renderTableFor(sec);
     };
-    cont.appendChild(div);
-  });
-  cont.firstChild?.click();
+    return div;
+  };
+
+  // Helper to render a group
+  const renderGroup = (name, sections, defaultOpen = true) => {
+    if (!sections || sections.length === 0) return;
+
+    // Group Header
+    const header = document.createElement('div');
+    header.className = 'sec-group-header';
+    header.style.cssText = "padding: 8px 12px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; font-size: 11px; letter-spacing: 0.5px; margin-top: 8px; cursor: pointer; display: flex; align-items: center; justify-content: space-between;";
+    header.innerHTML = `<span>${name}</span><span class="arrow" style="transition: transform 0.2s; font-size: 10px;">${defaultOpen ? '▼' : '▶'}</span>`;
+
+    // Group Container
+    const groupDiv = document.createElement('div');
+    groupDiv.className = 'sec-group-content';
+    if (!defaultOpen) groupDiv.style.display = 'none';
+
+    sections.forEach(sec => {
+      const item = createSecItem(sec);
+      if (item) groupDiv.appendChild(item);
+    });
+
+    // Toggle Logic
+    header.onclick = () => {
+      const isOpen = groupDiv.style.display !== 'none';
+      if (isOpen) {
+        groupDiv.style.display = 'none';
+        header.querySelector('.arrow').textContent = '▶';
+      } else {
+        groupDiv.style.display = 'block';
+        header.querySelector('.arrow').textContent = '▼';
+      }
+    };
+
+    cont.appendChild(header);
+    cont.appendChild(groupDiv);
+  };
+
+  // Track which sections we have rendered
+  const renderedSections = new Set();
+  const groupsToRender = [];
+
+  // Prepare defined groups
+  for (const [groupName, secList] of Object.entries(SECTION_GROUPS)) {
+    const relevant = secList.filter(s => diffs[s]);
+    if (relevant.length > 0) {
+      groupsToRender.push({ name: groupName, sections: relevant });
+      relevant.forEach(s => renderedSections.add(s));
+    }
+  }
+
+  // Identify General (Remaining) sections
+  const allSections = Object.keys(diffs).sort();
+  const generalSections = allSections.filter(s => !renderedSections.has(s));
+
+  // Render General FIRST
+  if (generalSections.length > 0) {
+    renderGroup("General", generalSections, true);
+  }
+
+  // Render other groups
+  groupsToRender.forEach(g => renderGroup(g.name, g.sections, true));
+
+  // Select first item by default
+  const firstItem = cont.querySelector('.sec-item');
+  if (firstItem) firstItem.click();
 }
 
 function passChangeFilter(changeType) {
