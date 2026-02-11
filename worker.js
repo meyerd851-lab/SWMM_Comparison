@@ -38,8 +38,12 @@ self.onmessage = async (ev) => {
       const py_b2 = pyodide.toPy(new Uint8Array(msg.file2));
       const py_tolerances = hasTolerances ? pyodide.toPy(tolerancesJS) : undefined;
 
+      const progressCallback = (pct, text) => {
+        self.postMessage({ type: "progress", payload: `${text} (${pct.toFixed(0)}%)` });
+      };
+
       try {
-        const out = core.run_compare(py_b1, py_b2, py_tolerances);
+        const out = core.run_compare(py_b1, py_b2, py_tolerances, progressCallback);
         const jsOut = out.toString();
         self.postMessage({ type: "result", payload: jsOut });
       } finally {

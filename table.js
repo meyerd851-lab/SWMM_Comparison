@@ -177,10 +177,12 @@ const SECTION_REF_MAP = {
   "INFLOWS": "JUNCTIONS",
   "RDII": "JUNCTIONS",
   "TREATMENT": "JUNCTIONS",
+  "COORDINATES": "JUNCTIONS", // Explicit node coordinates section
 
   // Links (Map to CONDUITS as a generic Link type proxy)
   "XSECTIONS": "CONDUITS",
   "LOSSES": "CONDUITS",
+  "VERTICES": "CONDUITS", // Link vertices section
 
   // Subcatchments
   "SUBCATCHMENTS": "SUBCATCHMENTS", // Self
@@ -189,7 +191,8 @@ const SECTION_REF_MAP = {
   "INFILTRATION": "SUBCATCHMENTS",
   "COVERAGES": "SUBCATCHMENTS",
   "LOADINGS": "SUBCATCHMENTS",
-  "LID_USAGE": "SUBCATCHMENTS"
+  "LID_USAGE": "SUBCATCHMENTS",
+  "POLYGONS": "SUBCATCHMENTS" // Subcatchment polygons section
 };
 
 export function renderTableFor(sec) {
@@ -438,7 +441,10 @@ export function renderTableFor(sec) {
     // If sec is in SECTION_REF_MAP, use that type. Otherwise use sec itself.
     const mapSec = SECTION_REF_MAP[sec] || sec;
 
-    tr.onclick = () => highlightElement(mapSec, id, true);
+    // Check if this row represents a removed item
+    const isRemoved = tr.querySelector('.badge.removed') !== null;
+
+    tr.onclick = () => highlightElement(mapSec, id, true, isRemoved, true);
     tr.classList.add(`row-id-${id.replace(/[^a-zA-Z0-9]/g, '_')}`);
     tr.addEventListener('highlight', () => tr.scrollIntoView({ behavior: 'smooth', block: 'center' }));
     tr.ondblclick = () => openDetail(sec, id);

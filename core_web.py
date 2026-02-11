@@ -827,17 +827,50 @@ def _ratio_close(a: float, b: float, tol=0.10) -> bool:
 # =========================
 # Rename proposals (using XY)
 # =========================
+
+class SpatialIndex:
+    """
+    A simple spatial hashing index to accelerate "nearest neighbor" queries.
+    
+    Instead of comparing every node against every other node (O(N*M)),
+    we bucket nodes into a grid. When looking for a match, we only check
+    candidates in the same grid cell and immediate neighbors.
+    """
+    def __init__(self, cell_size_ft: float = 200.0):
+        self.cell_size = cell_size_ft
+        # Grid maps (cell_x, cell_y) -> list of (id, x, y)
+        self.grid: Dict[Tuple[int, int], List[Tuple[str, float, float]]] = defaultdict(list)
+
+    def _get_cell(self, x: float, y: float) -> Tuple[int, int]:
+        return (int(x // self.cell_size), int(y // self.cell_size))
+
+    def add(self, id: str, x: float, y: float):
+        cell = self._get_cell(x, y)
+        self.grid[cell].append((id, x, y))
+
+    def query_candidates(self, x: float, y: float, radius_ft: float = 0.0) -> List[Tuple[str, float, float]]:
+        """
+        Returns a list of items from the cell containing (x,y) and its 8 neighbors.
+        If radius is large, one might need to check more cells, but for this
+        renaming logic, the search radius is usually very small compared to cell size.
+        """
+        cx, cy = self._get_cell(x, y)
+        
+        # If radius is larger than cell size, we might need a wider search,
+        # but for our use case (finding "renames" at same location), radius is 0.5ft
+        # and cell size is ~100-500ft, so 3x3 block is plenty.
+        candidates = []
+        for dx in (-1, 0, 1):
+            for dy in (-1, 0, 1):
+                candidates.extend(self.grid.get((cx + dx, cy + dy), []))
+        return candidates
 def _build_node_renames(pr1: INPParseResult, pr2: INPParseResult,
                         g1: SWMMGeometry, g2: SWMMGeometry,
                         eps_m: float = 0.5 * _FEET_TO_M) -> Dict[str, str]:
     """
     Identifies nodes that have been renamed based on their location.
     
-    If a node in File 1 is missing in File 2, and a new node in File 2 appears
-    at the exact same location (within a small tolerance), we assume it was renamed.
-    
-    Args:
-        eps_m: The distance tolerance in meters (default is ~0.5 ft).
+    Optimization: Uses SpatialIndex to avoid O(N^2) comparisons.
     """
     node_secs = ("JUNCTIONS", "OUTFALLS", "DIVIDERS", "STORAGE")
     # Get set of all node IDs in both files
@@ -851,20 +884,37 @@ def _build_node_renames(pr1: INPParseResult, pr2: INPParseResult,
     n1 = g1.nodes if g1 else {}
     n2 = g2.nodes if g2 else {}
 
+    # Build Spatial Index for "New" Nodes (File 2)
+    # This matches the pattern: for each Old, find closest New.
+    idx = SpatialIndex(cell_size_ft=500.0)
+    for new_id in u2:
+        if new_id in n2:
+            x, y = n2[new_id]
+            idx.add(new_id, x, y)
+
     pairs = []
     for old_id in u1:
         if old_id not in n1:
             continue
         p1 = n1[old_id]
+        x1, y1 = p1
+        
         best = None
         best_d = float("inf")
         
-        # Search for the closest new node
-        for new_id in u2:
-            if new_id not in n2:
+        # Optimization: Only check candidates from the spatial index
+        candidates = idx.query_candidates(x1, y1)
+
+        for new_id, x2, y2 in candidates:
+            # Quick bounding box check (optional but helps avoid sqrt)
+            # eps_m is in meters, coordinates are in feet.
+            # Convert tolerance to feet for check:
+            tol_ft = eps_m / _FEET_TO_M
+            if abs(x1 - x2) > tol_ft or abs(y1 - y2) > tol_ft:
                 continue
-            p2 = n2[new_id]
-            d = _dist_m_xy(p1, p2)
+
+            # Exact distance check
+            d = _dist_m_xy((x1, y1), (x2, y2))
             
             # If it's within tolerance and is the closest one found so far
             if d < eps_m and d < best_d:
@@ -894,10 +944,7 @@ def _build_link_renames(pr1: INPParseResult, pr2: INPParseResult,
     """
     Identifies links (conduits) that have been renamed.
     
-    This is more complex than nodes. We check:
-    1. Are the start/end nodes the same (or renamed versions of each other)?
-    2. Is the length similar?
-    3. Is the centroid (midpoint) location similar?
+    Optimization: Uses SpatialIndex on link centroids to speed up matching.
     """
     link_secs = ("CONDUITS", "PUMPS", "ORIFICES", "WEIRS", "OUTLETS")
     ids1 = set().union(*[set(pr1.sections.get(s, {})) for s in link_secs])
@@ -915,8 +962,27 @@ def _build_link_renames(pr1: INPParseResult, pr2: INPParseResult,
                     return (vals[0], vals[1])
         return (None, None)
 
+    # Build Spatial Index for "New" Links (File 2) using Centroids
+    idx = SpatialIndex(cell_size_ft=500.0)
+    link2_meta = {} # Cache for metadata to avoid re-parsing
+    
+    for new_id in u2:
+        coords2 = g2.links.get(new_id) if g2 else None
+        if not coords2 or len(coords2) < 2:
+            continue
+        c2 = _centroid_xy(coords2)
+        if c2:
+            idx.add(new_id, c2[0], c2[1])
+            link2_meta[new_id] = {
+                "coords": coords2,
+                "len": _polyline_length_m(coords2),
+                "endpoints": endpoints(pr2, new_id),
+                "centroid": c2
+            }
+
     renames: Dict[str, str] = {}
     used_new = set()
+    inv_node_renames = {v: k for k, v in node_renames.items()} 
 
     for old_id in u1:
         coords1 = g1.links.get(old_id) if g1 else None
@@ -925,33 +991,34 @@ def _build_link_renames(pr1: INPParseResult, pr2: INPParseResult,
         e1 = endpoints(pr1, old_id)
         len1 = _polyline_length_m(coords1)
         c1 = _centroid_xy(coords1)
+        if not c1: continue
 
         best = None
         best_score = float("inf")
         
-        for new_id in u2:
-            if new_id in used_new:
-                continue
-            coords2 = g2.links.get(new_id) if g2 else None
-            if not coords2 or len(coords2) < 2:
-                continue
+        # Optimization: Only check candidates near the centroid
+        candidates = idx.query_candidates(c1[0], c1[1])
 
+        for new_id, _, _ in candidates:
+            if new_id in used_new: 
+                continue
+                
+            meta2 = link2_meta.get(new_id)
+            if not meta2: continue # Should be in there if returned by index
+            
             # Check connectivity (Start/End nodes)
-            e2 = endpoints(pr2, new_id)
-            inv = {v: k for k, v in node_renames.items()} # Reverse map for node renames
-            e2_mapped = tuple(inv.get(x, x) for x in e2)
+            e2 = meta2["endpoints"]
+            e2_mapped = tuple(inv_node_renames.get(x, x) for x in e2)
             endpoint_ok = set(e1) == set(e2_mapped)
 
             # Check length similarity
-            len2 = _polyline_length_m(coords2)
+            len2 = meta2["len"]
             if not _ratio_close(max(len1, 1e-6), max(len2, 1e-6), tol=len_tol):
                 if not endpoint_ok:
                     continue
 
             # Check spatial proximity of centroids
-            c2 = _centroid_xy(coords2)
-            if not c1 or not c2:
-                continue
+            c2 = meta2["centroid"]
             dcent = _dist_m_xy(c1, c2)
             
             # If endpoints don't match, we need to be very close spatially
@@ -959,7 +1026,6 @@ def _build_link_renames(pr1: INPParseResult, pr2: INPParseResult,
                 continue
 
             # Calculate a score (lower is better)
-            # Prioritize endpoint matches (0) over just spatial matches (1000)
             score = (0 if endpoint_ok else 1) * 1000 + dcent
             if score < best_score:
                 best, best_score = new_id, score
@@ -974,11 +1040,33 @@ def _build_sub_renames(pr1: INPParseResult, pr2: INPParseResult,
                        g1: SWMMGeometry, g2: SWMMGeometry,
                        eps_centroid_m: float = 10 * _FEET_TO_M,
                        area_tol: float = 0.10) -> Dict[str, str]:
+    """
+    Identifies subcatchments that have been renamed.
+    
+    Optimization: Uses SpatialIndex on subcatchment centroids.
+    """
     s = "SUBCATCHMENTS"
     ids1 = set(pr1.sections.get(s, {}))
     ids2 = set(pr2.sections.get(s, {}))
     u1 = [sid for sid in ids1 if sid not in ids2]
     u2 = [sid for sid in ids2 if sid not in ids1]
+
+    # Build Spatial Index for "New" Subs
+    idx = SpatialIndex(cell_size_ft=1000.0) # Larger cell size for subs
+    sub2_meta = {}
+
+    for new_id in u2:
+        poly2 = g2.subpolys.get(new_id) if g2 else None
+        if not poly2 or len(poly2) < 3:
+            continue
+        c2 = _centroid_xy(poly2)
+        if c2:
+            idx.add(new_id, c2[0], c2[1])
+            sub2_meta[new_id] = {
+                "centroid": c2,
+                "area": _bbox_area_m2(poly2) or 1.0,
+                "poly": poly2
+            }
 
     renames: Dict[str, str] = {}
     used_new = set()
@@ -991,19 +1079,27 @@ def _build_sub_renames(pr1: INPParseResult, pr2: INPParseResult,
 
         best = None
         best_score = float("inf")
-        for new_id in u2:
-            if new_id in used_new:
-                continue
-            poly2 = g2.subpolys.get(new_id) if g2 else None
-            if not poly2 or len(poly2) < 3:
-                continue
-            c2 = _centroid_xy(poly2)
-            a2 = _bbox_area_m2(poly2) or 1.0
+        
+        # Optimization: Candidate search
+        candidates = idx.query_candidates(c1[0], c1[1])
+        
+        for new_id, _, _ in candidates:
+            if new_id in used_new: continue
+            
+            meta2 = sub2_meta.get(new_id)
+            if not meta2: continue
+            
+            # Check Area
+            a2 = meta2["area"]
             if not _ratio_close(a1, a2, tol=area_tol):
                 continue
+                
+            # Check Distance
+            c2 = meta2["centroid"]
             dcent = _dist_m_xy(c1, c2)
             if dcent > eps_centroid_m:
                 continue
+            
             if dcent < best_score:
                 best, best_score = new_id, dcent
 
@@ -1148,7 +1244,8 @@ def _calculate_slope(conduit_vals: List[str], sections: Dict[str, Dict[str, List
 def compare_sections(secs1: Dict[str, Dict[str, List[str]]],
                      secs2: Dict[str, Dict[str, List[str]]],
                      headers1: Dict[str, List[str]],
-                     headers2: Dict[str, List[str]]) -> Tuple[Dict[str, DiffSection], Dict[str, List[str]]]:
+                     headers2: Dict[str, List[str]],
+                     progress_callback=None) -> Tuple[Dict[str, DiffSection], Dict[str, List[str]]]:
     """
     Compares all sections between two files.
     
@@ -1158,8 +1255,16 @@ def compare_sections(secs1: Dict[str, Dict[str, List[str]]],
     out: Dict[str, DiffSection] = {}
     all_headers: Dict[str, List[str]] = {}
     
+    all_sections = sorted(set(secs1) | set(secs2))
+    total_secs = len(all_sections)
+
     # Iterate over all unique sections found in either file
-    for sec in sorted(set(secs1) | set(secs2)):
+    for i, sec in enumerate(all_sections):
+        if progress_callback:
+            # Map comparison stage to 40% - 90% of total progress
+            pct = 40 + (i / max(total_secs, 1) * 50)
+            progress_callback(pct, f"Comparing {sec}...")
+
         recs1 = secs1.get(sec, {})
         recs2 = secs2.get(sec, {})
         keys1, keys2 = set(recs1), set(recs2)
@@ -1369,7 +1474,7 @@ def _filter_changes_by_tolerance(diffs: Dict[str, DiffSection], tolerances: Dict
 # =========================
 # Public entrypoint for the web worker
 # =========================
-def run_compare(file1_bytes, file2_bytes, tolerances_py=None) -> str:
+def run_compare(file1_bytes, file2_bytes, tolerances_py=None, progress_callback=None) -> str:
     """
     Main entry point for the comparison logic.
     
@@ -1384,14 +1489,19 @@ def run_compare(file1_bytes, file2_bytes, tolerances_py=None) -> str:
     f1 = _to_text_io(file1_bytes)
     f2 = _to_text_io(file2_bytes)
 
+    if progress_callback: progress_callback(5, "Parsing inputs...")
+
     # 1. Parse Attributes (Text Data)
     pr1 = _parse_inp_iter(f1)
+    if progress_callback: progress_callback(10, "Parsed File 1...")
     pr2 = _parse_inp_iter(f2)
+    if progress_callback: progress_callback(15, "Parsed File 2...")
 
     # 2. Parse Geometry (Spatial Data)
     f1.seek(0); f2.seek(0)
     g1 = _parse_geom_iter(f1)
     g2 = _parse_geom_iter(f2)
+    if progress_callback: progress_callback(20, "Parsed Geometry...")
 
     # --- Handle Tolerances ---
     # Handle tolerances whether passed as a JS Proxy or a generic Python dict
@@ -1406,11 +1516,14 @@ def run_compare(file1_bytes, file2_bytes, tolerances_py=None) -> str:
 
     # 3. Spatial Reconciliation
     #    Attempt to match renamed elements using geometry.
+    if progress_callback: progress_callback(25, " Reconciling spatial data...")
     renames = spatial_reconcile_and_remap_using_geom(pr1, pr2, g1, g2)
+    if progress_callback: progress_callback(35, " Spatial reconciliation done...")
 
     # 4. Compare Sections
     #    Calculate added/removed/changed items.
-    diffs, headers = compare_sections(pr1.sections, pr2.sections, pr1.headers, pr2.headers)
+    if progress_callback: progress_callback(40, "Comparing sections...")
+    diffs, headers = compare_sections(pr1.sections, pr2.sections, pr1.headers, pr2.headers, progress_callback)
 
     # --- FORCE RENAMED ITEMS INTO "CHANGED" ---
 
@@ -1430,6 +1543,7 @@ def run_compare(file1_bytes, file2_bytes, tolerances_py=None) -> str:
     # 5. Filter by Tolerance
     #    Remove "Changed" items if the difference is within the specified tolerance.
     
+    if progress_callback: progress_callback(90, "Filtering by tolerance...")
     _filter_changes_by_tolerance(diffs, tolerances, renames)
 
     # --- INJECT "New Name" COLUMN ---
@@ -1442,6 +1556,7 @@ def run_compare(file1_bytes, file2_bytes, tolerances_py=None) -> str:
                 headers[sec].insert(1, "New Name")
 
     # 6. Build Output JSON
+    if progress_callback: progress_callback(95, "Building output...")
 
     # --- INJECT "Slope" COLUMN for CONDUITS ---
     if "CONDUITS" in diffs:

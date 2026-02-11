@@ -413,14 +413,21 @@ export function drawGeometry(json) {
 
 // --- HIGHLIGHTING ---
 
-export function highlightElement(section, id, shouldZoom = false, isRemoved = false) {
+export function highlightElement(section, id, shouldZoom = false, isRemoved = false, skipScroll = false) {
   layers.select.clearLayers();
 
   // Highlight table row
   document.querySelectorAll('#table tr.selected').forEach(r => r.classList.remove('selected'));
   const safeId = id.replace(/[^a-zA-Z0-9]/g, '_');
   const row = document.querySelector(`#table .row-id-${safeId}`);
-  if (row) { row.classList.add('selected'); row.dispatchEvent(new Event('highlight')); }
+
+  if (row) {
+    row.classList.add('selected');
+    // Only dispatch the event (which triggers scroll) if we NOT skipping scroll
+    if (!skipScroll) {
+      row.dispatchEvent(new Event('highlight'));
+    }
+  }
 
   const t = secType(section);
   if (!t) return;
