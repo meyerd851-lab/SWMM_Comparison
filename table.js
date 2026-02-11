@@ -169,6 +169,29 @@ function passChangeFilter(changeType) {
 
 let currentSort = { sec: null, col: 0, dir: 1 }; // dir: 1=asc, -1=desc
 
+// --- SECTION REFERENCE MAPPING ---
+// Maps non-geometry sections to their geometry counterparts (e.g. DWF -> JUNCTIONS (Node))
+const SECTION_REF_MAP = {
+  // Nodes (Map to JUNCTIONS as a generic Node type proxy)
+  "DWF": "JUNCTIONS",
+  "INFLOWS": "JUNCTIONS",
+  "RDII": "JUNCTIONS",
+  "TREATMENT": "JUNCTIONS",
+
+  // Links (Map to CONDUITS as a generic Link type proxy)
+  "XSECTIONS": "CONDUITS",
+  "LOSSES": "CONDUITS",
+
+  // Subcatchments
+  "SUBCATCHMENTS": "SUBCATCHMENTS", // Self
+  "GWF": "SUBCATCHMENTS",
+  "GROUNDWATER": "SUBCATCHMENTS",
+  "INFILTRATION": "SUBCATCHMENTS",
+  "COVERAGES": "SUBCATCHMENTS",
+  "LOADINGS": "SUBCATCHMENTS",
+  "LID_USAGE": "SUBCATCHMENTS"
+};
+
 export function renderTableFor(sec) {
   const table = document.getElementById('table');
   const { diffs, headers } = state.LAST.json;
@@ -217,7 +240,7 @@ export function renderTableFor(sec) {
     table.querySelectorAll('tbody tr').forEach((tr) => {
       const hydro = tr.dataset.hydro;
       const month = tr.dataset.month;
-      tr.onclick = () => highlightElement(sec, `${hydro} ${month}`, true);
+      // Hydrographs don't map to geometry
       tr.ondblclick = () => openDetail("HYDROGRAPHS", `${hydro} ${month}`);
     });
     return;
@@ -410,7 +433,12 @@ export function renderTableFor(sec) {
 
   table.querySelectorAll('tbody tr').forEach((tr) => {
     const id = tr.children[0]?.textContent || "";
-    tr.onclick = () => highlightElement(sec, id, true);
+
+    // Determine mapping for highlighting
+    // If sec is in SECTION_REF_MAP, use that type. Otherwise use sec itself.
+    const mapSec = SECTION_REF_MAP[sec] || sec;
+
+    tr.onclick = () => highlightElement(mapSec, id, true);
     tr.classList.add(`row-id-${id.replace(/[^a-zA-Z0-9]/g, '_')}`);
     tr.addEventListener('highlight', () => tr.scrollIntoView({ behavior: 'smooth', block: 'center' }));
     tr.ondblclick = () => openDetail(sec, id);
