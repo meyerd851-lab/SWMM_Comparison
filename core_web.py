@@ -653,6 +653,20 @@ def _parse_inp_iter(lines) -> INPParseResult:
                 ]
             continue
 
+        if current == "TITLE":
+            # Treat the entire TITLE section as a single block/element
+            # ID will be "Project Description", value will be list of lines
+            key = "Project Description"
+            if key not in sections[current]:
+                sections[current][key] = []
+                # Initialize headers if not already done (though TITLE header is usually empty)
+                if not headers.get(current):
+                   headers[current] = ["Content"]
+            
+            # Append the whole line as a value (row content)
+            sections[current][key].append(line.strip())
+            continue
+
         # Generic Section Parsing
         # The first token is usually the Element ID (Name), and the rest are values.
         element_id = tokens[0]

@@ -229,6 +229,13 @@ export function openDetail(section, id) {
     newArr = Array.isArray(changedObj) ? changedObj[1] : (changedObj?.values?.[1] || []);
   }
 
+  // --- SPECIAL HANDLING FOR TITLE SECTION ---
+  if (section === "TITLE") {
+    // Join all lines into a single string to display as one block
+    if (oldArr && oldArr.length > 0) oldArr = [oldArr.join('\n')];
+    if (newArr && newArr.length > 0) newArr = [newArr.join('\n')];
+  }
+
   titleEl.textContent = `${section} : ${id}`;
   const renameTo = renames?.[section]?.[id];
   metaEl.innerHTML = `<span class="badge ${changeType.toLowerCase()}">${changeType}</span>${renameTo ? `<span class="badge" style="margin-left:6px; background:var(--bg-surface-hover); color:var(--text-secondary);">Renamed ↦ ${renameTo}</span>` : ''}`;
