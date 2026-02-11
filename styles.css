@@ -597,6 +597,12 @@ table.data-table tr.selected td {
   pointer-events: auto;
 }
 
+/* Specific override for the Details modal to give it more room */
+#modal {
+  width: 95vw;
+  max-width: 1200px;
+}
+
 .modal-content {
   background: var(--bg-panel);
   border-radius: var(--radius-lg);
