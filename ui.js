@@ -111,6 +111,22 @@ export function closeCompareModal() {
   setTimeout(() => { if (!el.classList.contains('open')) el.style.display = 'none'; }, 200);
 }
 
+// Tolerance Toggle
+const diffToggle = document.getElementById('toggleTolerances');
+if (diffToggle) {
+  diffToggle.onclick = () => {
+    const opts = document.getElementById('toleranceOptions');
+    const arrow = document.getElementById('tolArrow');
+    if (opts.style.display === 'none') {
+      opts.style.display = 'grid';
+      arrow.textContent = '▼';
+    } else {
+      opts.style.display = 'none';
+      arrow.textContent = '▶';
+    }
+  };
+}
+
 // ==============================================================================
 // SECTION 6: DETAIL VIEW
 // ==============================================================================

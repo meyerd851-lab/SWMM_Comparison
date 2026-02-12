@@ -119,7 +119,7 @@
           </label>
           <span style="width:1px; height: 16px; background: var(--border-medium);"></span>
           <label class="checkbox-label">
-            <input type="checkbox" id="fShowDiffs"> Show Diffs
+            <input type="checkbox" id="fShowDiffs"> Show Differences
           </label>
         </div>
 
@@ -158,6 +158,12 @@
                 <option value="EPSG:3733">NAD83 / Ohio North (ftUS)</option>
                 <option value="EPSG:6499">NAD83 / Michigan South (ft)</option>
                 <option value="EPSG:2272">NAD83 / Pennsylvania South (ftUS)</option>
+              </select>
+              <select id="mapModeSelect" style="padding: 4px; font-size: 11px;">
+                <option value="Default" selected>Default View</option>
+                <option value="Changed">Focus: Changed</option>
+                <option value="Added">Focus: Added</option>
+                <option value="Removed">Focus: Removed</option>
               </select>
               <label class="checkbox-label" style="font-size:11px;"><input type="checkbox" id="labelsToggle" checked>
                 Labels</label>
@@ -216,8 +222,13 @@
           </div>
         </div>
 
-        <h3 style="font-size:14px; margin-bottom:12px;">Tolerances</h3>
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+        <button id="toggleTolerances" class="btn"
+          style="width:100%; justify-content:space-between; margin-bottom:12px;">
+          <span>Tolerance Options</span>
+          <span id="tolArrow">▶</span>
+        </button>
+
+        <div id="toleranceOptions" style="display:none; grid-template-columns: 1fr 1fr; gap: 12px;">
           <label class="flex-col gap-2">Conduit Length <input type="number" id="tol_conduit_length" value="0"
               step="0.1"></label>
           <label class="flex-col gap-2">Junc Invert <input type="number" id="tol_junction_invert" value="0"
@@ -269,13 +280,44 @@
         <button class="icon-btn" onclick="closeHelpModal()">✕</button>
       </div>
       <div class="modal-body">
-        <p><strong>About:</strong> This tool runs entirely in your browser using Pyodide to compare SWMM models.</p>
-        <ul>
-          <li>Load two .inp files to see differences.</li>
-          <li>Use the checkboxes to filter Added/Removed/Changed items.</li>
-          <li>Detailed comparison is available for geometry and hydraulics.</li>
-          <li>Export results to Excel or Shapefiles.</li>
-        </ul>
+        <div style="line-height: 1.6;">
+          <h3 style="font-size:14px; margin-bottom:8px; color:var(--primary);">1. Getting Started</h3>
+          <ul style="margin:0 0 16px 0; padding-left:20px;">
+            <li>Click <strong>Run Comparison</strong> to open the setup dialog.</li>
+            <li>Select two input files (<strong>.inp</strong> or <strong>.txt</strong>).</li>
+            <li>(Optional) Expand <strong>Tolerance Options</strong> to ignore minor differences.</li>
+            <li>Click <strong>Compare Files</strong> to generate the report.</li>
+          </ul>
+
+          <h3 style="font-size:14px; margin-bottom:8px; color:var(--primary);">2. Navigating Results</h3>
+          <ul style="margin:0 0 16px 0; padding-left:20px;">
+            <li>Use the <strong>Sections</strong> sidebar to switch between data tables (e.g., Junctions, Conduits).
+            </li>
+            <li><strong>Filter Buttons</strong> (top toolbar) show/hide Added, Removed, or Changed items.</li>
+            <li>Use the <strong>Search</strong> bar to find specific element IDs.</li>
+            <li><strong>Double-click</strong> any row (or click the <strong>Details</strong> icon) to see a full
+              field-by-field comparison.</li>
+          </ul>
+
+          <h3 style="font-size:14px; margin-bottom:8px; color:var(--primary);">3. Using the Map</h3>
+          <ul style="margin:0 0 16px 0; padding-left:20px;">
+            <li>Elements are colored by status: <span style="color:var(--added); font-weight:600;">Green (Added)</span>,
+              <span style="color:var(--removed); font-weight:600;">Red (Removed)</span>, <span
+                style="color:var(--changed); font-weight:600;">Orange (Changed)</span>.</li>
+            <li>Use the <strong>Map View Mode</strong> dropdown (top of map) to focus on specific changes.</li>
+            <li><strong>Click</strong> an element on the map to see its status and changes popup.</li>
+            <li>Toggle <strong>Labels</strong> to see element IDs at high zoom levels.</li>
+          </ul>
+
+          <h3 style="font-size:14px; margin-bottom:8px; color:var(--primary);">4. Export & Save</h3>
+          <ul style="margin:0 0 16px 0; padding-left:20px;">
+            <li><strong>File > Save Session:</strong> Saves your current comparison to a <code>.sca</code> file to
+              reload later.</li>
+            <li><strong>File > Export Excel:</strong> Downloads a detailed .xlsx report of all differences.</li>
+            <li><strong>File > Export Shapefile:</strong> Generates GIS files for the added/removed/changed elements.
+            </li>
+          </ul>
+        </div>
       </div>
       <div class="modal-footer">
         <button onclick="closeHelpModal()">Close</button>

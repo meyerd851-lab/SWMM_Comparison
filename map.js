@@ -841,57 +841,13 @@ const overlays = {
 // Create the standard layers control
 const layersControl = L.control.layers(baseLayers, overlays, { position: 'topright' }).addTo(map);
 
-// Inject the Filter Dropdown into the Layers Control
-// (Called immediately or on simple timeout to ensure layers control exists)
-setTimeout(() => {
-  const container = document.querySelector('.leaflet-control-layers-list');
-  if (!container || document.getElementById('mapFilterSelect')) return;
-
-  const separator = document.createElement('div');
-  separator.className = 'leaflet-control-layers-separator';
-
-  const wrapper = document.createElement('div');
-  wrapper.style.padding = "5px 10px";
-
-  const label = document.createElement('div');
-  label.innerText = "Map View Mode:";
-  label.style.marginBottom = "4px";
-  label.style.fontWeight = "bold";
-  label.style.fontSize = "12px";
-  wrapper.appendChild(label);
-
-  const select = document.createElement('select');
-  select.id = 'mapFilterSelect';
-  select.style.width = "100%";
-  select.style.padding = "4px";
-  select.style.borderRadius = "4px";
-  select.style.border = "1px solid var(--border-medium)";
-  select.style.background = "var(--bg-surface)";
-  select.style.color = "var(--text-main)";
-  select.style.fontSize = "11px";
-  select.style.cursor = "pointer";
-
-  Object.keys(FILTER_MODES).forEach(mode => {
-    const opt = document.createElement('option');
-    opt.value = mode;
-    opt.innerText = FILTER_MODES[mode].label.replace("Focus: ", "");
-    select.appendChild(opt);
-  });
-
-  select.onchange = (e) => {
+// New Map Mode Selection Logic
+const mapModeSelect = document.getElementById('mapModeSelect');
+if (mapModeSelect) {
+  mapModeSelect.addEventListener('change', (e) => {
     setMapFilter(e.target.value);
-  };
-
-  // Prevent map interaction when using the select
-  L.DomEvent.disableClickPropagation(select);
-  L.DomEvent.disableScrollPropagation(select);
-
-  wrapper.appendChild(select);
-
-  // Insert at the top: Wrapper first, then a separator
-  container.prepend(separator);
-  container.prepend(wrapper);
-}, 500);
+  });
+}
 
 // Labels Toggle
 document.getElementById('labelsToggle').addEventListener('change', () => {

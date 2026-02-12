@@ -43,14 +43,14 @@ export function groupHydroSummary(d) {
 // --- SECTION GROUPING CONFIGURATION ---
 const SECTION_GROUPS = {
   Nodes: [
-    "DWF", "INFLOWS", "JUNCTIONS", "OUTFALLS", "RDII", "STORAGE", "DIVIDERS", "TREATMENT", "UNITHYD", "HYDROGRAPHS"
+    "DWF", "INFLOWS", "JUNCTIONS", "OUTFALLS", "RDII", "STORAGE", "DIVIDERS", "TREATMENT", "UNITHYD", "HYDROGRAPHS", "HYDROGRAPH_RAINGAGES"
   ],
   Links: [
     "CONDUITS", "PUMPS", "ORIFICES", "WEIRS", "OUTLETS", "XSECTIONS", "TRANSECTS", "STREETS", "INLETS", "INLET_USAGE", "LOSSES"
   ],
   Subcatchments: [
     "SUBCATCHMENTS", "POLLUTANTS", "LANDUSES", "COVERAGES", "BUILDUP", "WASHOFF", "LOADINGS",
-    "GWF", "GROUNDWATER", "INFILTRATION", "LID_CONTROLS", "LID_USAGE"
+    "GWF", "GROUNDWATER", "INFILTRATION", "LID_CONTROLS", "LID_USAGE", "SUBAREAS"
   ]
 };
 
@@ -192,6 +192,7 @@ const SECTION_REF_MAP = {
   "COVERAGES": "SUBCATCHMENTS",
   "LOADINGS": "SUBCATCHMENTS",
   "LID_USAGE": "SUBCATCHMENTS",
+  "SUBAREAS": "SUBCATCHMENTS",
   "POLYGONS": "SUBCATCHMENTS" // Subcatchment polygons section
 };
 
@@ -211,7 +212,8 @@ export function renderTableFor(sec) {
     const rows = groupHydroSummary(d);
     const hdrs = ["Hydrograph", "Month", "ChangeType"];
 
-    let thead = `<thead><tr><th style="width:180px">ElementID</th><th style="width:110px">Change</th>`;
+    // Add empty header for details column
+    let thead = `<thead><tr><th style="width:40px"></th><th style="width:180px">ElementID</th><th style="width:110px">Change</th>`;
     for (const h of hdrs) thead += `<th>${escapeHtml(h)}</th>`;
     thead += `</tr></thead>`;
 
@@ -231,6 +233,10 @@ export function renderTableFor(sec) {
       const type = r.changeType === "Added" || r.changeType === "Removed" ? r.changeType : "Changed";
       const badge = type.toLowerCase();
       let tr = `<tr data-hydro="${escapeHtml(r.hydro)}" data-month="${escapeHtml(r.month)}">`;
+      // Add details button cell
+      tr += `<td><button class="icon-btn btn-details" style="padding:4px; width:24px; height:24px;" title="Open Details">
+             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
+             </button></td>`;
       tr += `<td>${escapeHtml(`${r.hydro} ${r.month}`)}</td>`;
       tr += `<td><span class="badge ${badge}">${type}</span></td>`;
       tr += `<td>${escapeHtml(r.hydro)}</td><td>${escapeHtml(r.month)}</td><td>${escapeHtml(r.changeType)}</td>`;
@@ -238,11 +244,21 @@ export function renderTableFor(sec) {
       body.push(tr);
     }
 
-    table.innerHTML = thead + `<tbody>${body.join("") || `<tr><td colspan="${hdrs.length + 2}" style="color:var(--text-tertiary);font-style:italic;padding:12px;">No rows match.</td></tr>`}</tbody>`;
+    table.innerHTML = thead + `<tbody>${body.join("") || `<tr><td colspan="${hdrs.length + 3}" style="color:var(--text-tertiary);font-style:italic;padding:12px;">No rows match.</td></tr>`}</tbody>`;
 
     table.querySelectorAll('tbody tr').forEach((tr) => {
       const hydro = tr.dataset.hydro;
       const month = tr.dataset.month;
+
+      // Wire up the details button
+      const btn = tr.querySelector('.btn-details');
+      if (btn) {
+        btn.onclick = (e) => {
+          e.stopPropagation();
+          openDetail("HYDROGRAPHS", `${hydro} ${month}`);
+        };
+      }
+
       // Hydrographs don't map to geometry
       tr.ondblclick = () => openDetail("HYDROGRAPHS", `${hydro} ${month}`);
     });
@@ -289,14 +305,17 @@ export function renderTableFor(sec) {
     let valA, valB;
     const col = currentSort.col;
 
-    if (col === 0) { // ElementID
+    if (col === 0) {
+      // Details column - unsortable, effectively random or maintain stable sort
+      return 0;
+    } else if (col === 1) { // ElementID (was 0)
       valA = a.id;
       valB = b.id;
-    } else if (col === 1) { // Change Type
+    } else if (col === 2) { // Change Type (was 1)
       valA = a.type;
       valB = b.type;
-    } else if (col >= 2 && col < 2 + hdrsLabeled.length) { // Data Columns
-      const idx = col - 2;
+    } else if (col >= 3 && col < 3 + hdrsLabeled.length) { // Data Columns (was 2)
+      const idx = col - 3;
 
       // Construct full arrays to match rendering (ID + values)
       const fullOldA = [a.id, ...(a.oldArr || [])];
@@ -314,7 +333,7 @@ export function renderTableFor(sec) {
         valB = b.type === 'Removed' ? b.diffs?.RimElevation_old : b.diffs?.RimElevation_new;
       }
     } else { // Diff Columns
-      const diffIdx = col - 2 - hdrsLabeled.length;
+      const diffIdx = col - 3 - hdrsLabeled.length;
       const diffKey = sec === 'CONDUITS' ? ['Length', 'InOffset', 'OutOffset'][diffIdx] :
         sec === 'JUNCTIONS' ? ['InvertElev', 'MaxDepth'][diffIdx] : null;
       if (diffKey) {
@@ -341,11 +360,13 @@ export function renderTableFor(sec) {
   };
 
 
+
   let thead = `<thead><tr>`;
-  thead += makeTh("ElementID", 0, 180);
-  thead += makeTh("Change", 1, 110);
-  hdrsLabeled.forEach((h, i) => thead += makeTh(h, i + 2));
-  diffHeaders.forEach((h, i) => thead += makeTh(h, i + 2 + hdrsLabeled.length));
+  thead += `<th style="width:40px"></th>`; // Details column
+  thead += makeTh("ElementID", 1, 180);
+  thead += makeTh("Change", 2, 110);
+  hdrsLabeled.forEach((h, i) => thead += makeTh(h, i + 3));
+  diffHeaders.forEach((h, i) => thead += makeTh(h, i + 3 + hdrsLabeled.length));
   thead += `</tr></thead>`;
 
   // Expose sort function globally so onclick works
@@ -369,6 +390,10 @@ export function renderTableFor(sec) {
   for (const r of filt) {
     const badge = r.type.toLowerCase();
     let tr = `<tr>`;
+    // Add details button cell
+    tr += `<td><button class="icon-btn btn-details" style="padding:4px; width:24px; height:24px;" title="Open Details">
+           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
+           </button></td>`;
     tr += `<td>${escapeHtml(r.id)}</td>`;
     tr += `<td><span class="badge ${badge}">${r.type}</span></td>`;
 
@@ -431,11 +456,20 @@ export function renderTableFor(sec) {
     tbodyParts.push(tr);
   }
 
-  const totalCols = hdrsLabeled.length + diffHeaders.length + 2;
+  const totalCols = hdrsLabeled.length + diffHeaders.length + 3;
   table.innerHTML = thead + `<tbody>${tbodyParts.join("") || `<tr><td colspan="${totalCols}" style="color:var(--text-tertiary);font-style:italic;padding:12px;">No rows match.</td></tr>`}</tbody>`;
 
   table.querySelectorAll('tbody tr').forEach((tr) => {
-    const id = tr.children[0]?.textContent || "";
+    const id = tr.children[1]?.textContent || ""; // ID is now at index 1 due to details button
+
+    // Wire up the details button
+    const btn = tr.querySelector('.btn-details');
+    if (btn) {
+      btn.onclick = (e) => {
+        e.stopPropagation();
+        openDetail(sec, id);
+      };
+    }
 
     // Determine mapping for highlighting
     // If sec is in SECTION_REF_MAP, use that type. Otherwise use sec itself.
