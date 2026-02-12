@@ -418,7 +418,7 @@ SECTION_HEADERS = {
     ],
 
     "HYDROGRAPHS": [
-        # You’re already handling this specially; this is just a generic header
+        
         "Hydrograph",
         "Month",
         "Response",
@@ -635,9 +635,9 @@ def _parse_inp_iter(lines) -> INPParseResult:
         # [HYDROGRAPHS] section can have two formats
         if current == 'HYDROGRAPHS':
             # Format 1: Mapping to a Rain Gage (e.g., "Hydro1  Gage1")
-            if len(tokens) == 2 and tokens[1].isnumeric():
+            if len(tokens) == 2:
                 hydrograph_id, gage_name = tokens[0], tokens[1]
-                g_sec = 'HYDROGRAPH_GAGES'
+                g_sec = 'HYDROGRAPH_RAINGAGES'
                 sections.setdefault(g_sec, {})
                 headers.setdefault(g_sec, ['Hydrograph', 'Gage'])
                 descriptions.setdefault(g_sec, 'Hydrograph to Rain Gage Mapping')
@@ -817,10 +817,8 @@ def _ratio_close(a: float, b: float, tol=0.10) -> bool:
 # ==============================================================================
 # SECTION 5: RENAMING LOGIC (HEURISTICS)
 # ==============================================================================
-# This is the "magic" of the comparison tool. It attempts to match elements
-# between two files even if their IDs (names) have changed.
 #
-# It uses spatial proximity (location) and attribute similarity to guess if
+# Uses spatial proximity (location) and attribute similarity to guess if
 # "Node A" in File 1 is actually "Node B" in File 2.
 # ------------------------------------------------------------------------------
 

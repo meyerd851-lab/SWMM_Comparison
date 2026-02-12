@@ -280,36 +280,7 @@ export function closeModal() {
   setTimeout(() => { if (!el.classList.contains('open')) el.style.display = 'none'; }, 200);
 }
 
-export function copyRowJSON() {
-  const section = state.LAST.currentSection;
-  if (!section) return;
-  const d = state.LAST.json?.diffs?.[section] || {};
-  const rawTitle = document.getElementById('modalTitle').textContent;
-  // Title format: Section : ID
-  const parts = rawTitle.split(':').map(s => s.trim());
-  const id = parts[parts.length - 1];
 
-  let oldArr = [], newArr = [];
-  if (d.added && Object.prototype.hasOwnProperty.call(d.added, id)) {
-    newArr = d.added[id] || [];
-  } else if (d.removed && Object.prototype.hasOwnProperty.call(d.removed, id)) {
-    oldArr = d.removed[id] || [];
-  } else if (d.changed && Object.prototype.hasOwnProperty.call(d.changed, id)) {
-    const changedObj = d.changed[id];
-    oldArr = Array.isArray(changedObj) ? changedObj[0] : (changedObj.values?.[0] || []);
-    newArr = Array.isArray(changedObj) ? changedObj[1] : (changedObj.values?.[1] || []);
-  }
-
-  const entry = {
-    section,
-    id,
-    headers: relabelHeaders(section, (state.LAST.json?.headers?.[section] || [])),
-    old: oldArr,
-    new: newArr,
-  };
-  navigator.clipboard.writeText(JSON.stringify(entry, null, 2));
-  alert("Row JSON copied.");
-}
 
 export function updateFileName(inputId, spanId) {
   const input = document.getElementById(inputId);
@@ -480,12 +451,40 @@ export async function exportToExcel() {
     let hdrs = headers[sec] ? [...headers[sec]] : [];
 
     if (sec === "HYDROGRAPHS") {
-      hdrs = ["Hydrograph", "Month", "Change Type"];
-      sheetData.push(["Element ID", "Change", ...hdrs]);
-      const { groupHydroSummary } = await import('./table.js');
-      const rows = groupHydroSummary(d);
+      hdrs = ["Hydrograph", "Month", "Response", "R", "T", "K", "Dmax", "Drecov", "Dinit"];
+      sheetData.push(["Change", ...hdrs]);
+
+      const rows = [];
+      const push = (type, key, valsOld, valsNew) => {
+        const parts = key.split(" ");
+        const hydro = parts[0] || "";
+        const month = parts[1] || "";
+        const response = parts.slice(2).join(" ") || "";
+        rows.push({ type, hydro, month, response, valsOld, valsNew });
+      };
+
+      for (const [k, v] of Object.entries(d.added || {})) push("Added", k, [], v);
+      for (const [k, v] of Object.entries(d.removed || {})) push("Removed", k, v, []);
+      for (const [k, v] of Object.entries(d.changed || {})) {
+        const ov = Array.isArray(v) ? v[0] : (v.values?.[0] || []);
+        const nv = Array.isArray(v) ? v[1] : (v.values?.[1] || []);
+        push("Changed", k, ov, nv);
+      }
+
+      rows.sort((a, b) => (a.hydro + a.month + a.response).localeCompare(b.hydro + b.month + b.response));
+
       rows.forEach(r => {
-        sheetData.push([`${r.hydro} ${r.month}`, r.changeType.includes("Added") || r.changeType.includes("Removed") ? r.changeType.split(',')[0] : "Changed", r.hydro, r.month, r.changeType]);
+        const row = [r.type, r.hydro, r.month, r.response];
+        // For remaining 6 params (R...Dinit)
+        for (let i = 0; i < 6; i++) {
+          const ov = r.valsOld[i] || "";
+          const nv = r.valsNew[i] || "";
+
+          if (r.type === "Added") row.push(nv);
+          else if (r.type === "Removed") row.push(ov);
+          else row.push((ov === nv) ? nv : `${ov} -> ${nv}`);
+        }
+        sheetData.push(row);
       });
     } else {
       hdrs = relabelHeaders(sec, hdrs);

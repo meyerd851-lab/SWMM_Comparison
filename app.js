@@ -11,7 +11,7 @@
 import { state } from './state.js';
 import { renderSections } from './table.js';
 import { drawGeometry } from './map.js';
-import { makeResizable, openHelpModal, closeHelpModal, saveSession, loadSession, exportToExcel, exportToShapefile, openDetail, closeModal, copyRowJSON, updateFileName, openCompareModal, closeCompareModal, setWorker, setSetStatusCallback, initTheme, toggleTheme } from './ui.js';
+import { makeResizable, openHelpModal, closeHelpModal, saveSession, loadSession, exportToExcel, exportToShapefile, openDetail, closeModal, updateFileName, openCompareModal, closeCompareModal, setWorker, setSetStatusCallback, initTheme, toggleTheme } from './ui.js';
 import { setOpenDetailCallback } from './table.js';
 
 // ==============================================================================
@@ -154,7 +154,7 @@ document.getElementById('themeBtn').addEventListener('click', toggleTheme);
 window.closeModal = closeModal;
 window.closeHelpModal = closeHelpModal;
 window.closeCompareModal = closeCompareModal;
-window.copyRowJSON = copyRowJSON;
+
 
 // Initialize resizable panels
 document.addEventListener('DOMContentLoaded', makeResizable);
