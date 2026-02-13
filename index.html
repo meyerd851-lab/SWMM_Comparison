@@ -3,301 +3,379 @@
 
 <head>
   <meta charset="utf-8" />
-  <title>SWMM Comparison App (BETA)</title>
+  <title>SWMM Comparison App | BETA</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <link rel="icon" type="image/x-icon" href="SWMM%20Comparison%20App%20Icon.ico">
+  <link rel="icon" type="image/png" href="SWMM_Comparison_Icon.png">
 
+  <!-- External Libs -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/proj4@2.11.0/dist/proj4.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
   <link rel="stylesheet" href="styles.css" />
 </head>
 
 <body>
-  <header>
-    <div class="menu">
-      <div class="menu-btn">File</div>
-      <div class="menu-content">
-        <button id="saveSess" class="menu-item">Save Comparison</button>
-        <button id="loadSessBtn" class="menu-item">Load Comparison</button>
-        <hr>
-        <button id="exportXlsx" class="menu-item">Export to Excel</button>
-        <button id="exportShp" class="menu-item">Export to Shapefile</button>
-        <input id="loadSessInput" type="file" accept=".sca" />
+
+  <div id="app-container">
+
+    <!-- HEADER -->
+    <header>
+      <div class="app-brand">
+        <img src="SWMM_Comparison_Icon.png" alt="App Icon">
+        <h1>SWMM Comparison App</h1>
+        <span class="tag">BETA</span>
       </div>
-    </div>
 
-    <div class="menu">
-      <div class="menu-btn">Map</div>
-      <div class="menu-content">
-        <label>Coordinate System:
-          <select id="crsSelect" title="Coordinate System" style="width:100%; margin-top:4px; padding: 4px;">
-            <option value="EPSG:3735" selected>NAD83 / Ohio South (ftUS)</option>
-            <option value="EPSG:3733">NAD83 / Ohio North (ftUS)</option>
-            <option value="EPSG:6499">NAD83 / Michigan South (ft)</option>
-            <option value="EPSG:2272">NAD83 / Pennsylvania South (ftUS)</option>
-          </select>
-        </label>
-        <hr>
-        <label class="menu-item"><input type="checkbox" id="labelsToggle" checked> Show Labels</label>
+      <!-- TABS (Now in Header) -->
+      <div class="header-tabs" style="display:flex; height: 100%;">
+        <button id="tabInp" class="header-tab-btn active">Model Comparison</button>
+        <button id="tabRpt" class="header-tab-btn">Results Comparison</button>
       </div>
-    </div>
 
-    <button id="go" class="primary">Run Comparison</button>
-    <span id="status"></span>
+      <div class="header-actions">
+        <!-- Main Actions -->
+        <button id="go" class="primary">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="5 3 19 12 5 21 5 3"></polygon>
+          </svg>
+          Run Comparison
+        </button>
 
-    <div id="app-title-group">
-      <h1>SWMM Comparison App (BETA)</h1>
-      <img src="SWMM%20Comparison%20App%20Icon.ico" alt="App Icon">
-      <button id="themeBtn" title="Toggle Theme" style="margin-right:4px;">☀/☾</button>
-      <button id="helpBtn" class="help-button" title="Help">?</button>
-    </div>
-  </header>
+        <span style="width: 1px; height: 24px; background: var(--border-medium); margin: 0 4px;"></span>
 
-  <div id="wrap">
-    <div id="left">
-      <div class="tabs" style="display:flex; gap: 4px; border-bottom: 2px solid #ddd; padding: 0 8px;">
-        <button id="tabInp" class="tab active" onclick="switchTab('INP')">INP Comparison</button>
-        <button id="tabRes" class="tab" onclick="switchTab('RESULTS')">Results Comparison</button>
-      </div>
-      <div id="sectionsPanel" class="panel">
-        <h3>Sections</h3>
-        <div id="sections">Run a comparison first.</div>
-      </div>
-    </div>
+        <!-- Settings / Tools -->
+        <button id="themeBtn" class="icon-btn" title="Toggle Theme">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="5"></circle>
+            <line x1="12" y1="1" x2="12" y2="3"></line>
+            <line x1="12" y1="21" x2="12" y2="23"></line>
+            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+            <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+            <line x1="1" y1="12" x2="3" y2="12"></line>
+            <line x1="21" y1="12" x2="23" y2="12"></line>
+            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+            <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+          </svg>
+        </button>
 
-    <div id="v-splitter" class="splitter v-splitter"></div>
+        <button id="helpBtn" class="icon-btn" title="Help">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"></circle>
+            <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+            <line x1="12" y1="17" x2="12.01" y2="17"></line>
+          </svg>
+        </button>
 
-    <div id="right">
-      <div class="panel" style="gap:8px;">
-        <div id="filters">
-          <div id="filter-group-inp">
-            <label><input type="checkbox" id="fAdded" checked> Added</label>
-            <label><input type="checkbox" id="fRemoved" checked> Removed</label>
+        <!-- File Menu Dropdown (Simplified for now as buttons, can be a menu later) -->
+        <div style="position: relative;" class="menu">
+          <button class="btn">File ▼</button>
+          <div class="menu-content" style="right: 0; left: auto;">
+            <button id="saveSess" class="menu-item">Save Session</button>
+            <button id="loadSessBtn" class="menu-item">Load Session</button>
+            <hr>
+            <button id="exportXlsx" class="menu-item">Export Excel</button>
+            <button id="exportShp" class="menu-item">Export Shapefile</button>
+            <!-- Hidden input -->
+            <input id="loadSessInput" type="file" accept=".sca" style="display:none;" />
           </div>
+        </div>
 
-          <label><input type="checkbox" id="fChanged" checked> Changed</label>
-          <label style="margin-left: 10px; border-left: 1px solid #ddd; padding-left: 10px;">
-            <input type="checkbox" id="fShowDiffs"> Show Diffs
+      </div>
+    </header>
+
+    <!-- SIDEBAR -->
+    <aside id="sidebar">
+      <div class="sidebar-header">
+        <h3
+          style="margin:0; font-size: 14px; text-transform: uppercase; letter-spacing: 1px; color: var(--text-tertiary);">
+          Sections</h3>
+      </div>
+      <div id="sectionsPanel" class="sidebar-content">
+        <div id="sections">
+          <div style="padding: 20px; text-align: center; color: var(--text-tertiary);">
+            Run a comparison to see sections.
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- MAIN CONTENT -->
+    <main id="main-content">
+
+      <!-- Toolbar / Filters -->
+      <div class="toolbar" id="toolbarInp">
+        <div class="filter-group">
+          <label class="checkbox-label" style="color: var(--added);">
+            <input type="checkbox" id="fAdded" checked> Added
           </label>
-          <input id="search" placeholder="Filter rows…" />
+          <label class="checkbox-label" style="color: var(--removed);">
+            <input type="checkbox" id="fRemoved" checked> Removed
+          </label>
+          <label class="checkbox-label" style="color: var(--changed);">
+            <input type="checkbox" id="fChanged" checked> Changed
+          </label>
+          <span style="width:1px; height: 16px; background: var(--border-medium);"></span>
+          <label class="checkbox-label">
+            <input type="checkbox" id="fShowDiffs"> Show Differences
+          </label>
+        </div>
 
+        <div class="filter-group">
+          <input id="search" type="text" placeholder="Search ID..." />
+          <span id="currentSectionLabel" style="font-weight: 600; color: var(--primary);"></span>
 
-
-          <span id="currentSectionLabel" style="color:#333;font-weight:600; margin-left:auto;"></span>
+          <span id="status" style="font-size: 12px; color: var(--text-secondary); margin-left:12px;"></span>
         </div>
       </div>
 
-      <div id="detailsWrap" style="flex:1;">
-        <div id="tableWrap" class="panel"
-          style="display:flex; flex-direction:column; min-height:0; padding-right: 12px;">
-          <h3 style="margin-bottom:8px;">Details</h3>
-          <div id="tableContainer">
-            <table id="table"></table>
+      <!-- RESULTS TOOLBAR (Hidden by default) -->
+      <div class="toolbar" id="toolbarRpt" style="display:none;">
+        <div class="filter-group">
+          <input id="rptSearch" type="text" placeholder="Search Result ID..." />
+        </div>
+      </div>
+
+      <!-- Split Layout for Table / Map -->
+      <div id="detailsWrap" style="display:flex; flex:1; overflow:hidden; position:relative;">
+
+        <!-- Table Side -->
+        <div id="tableWrap" style="flex: 1; display:flex; flex-direction:column; min-width: 0;">
+          <div id="table-container">
+            <table id="table" class="data-table"></table>
+            <!-- Results Table Container -->
+            <div id="rptTableContainer" style="display:none; padding: 20px; overflow:auto;"></div>
           </div>
         </div>
 
-        <div id="map-v-splitter" class="splitter v-splitter"></div>
+        <!-- Splitter -->
+        <div id="map-v-splitter" class="gutter gutter-horizontal" style="width: 6px; cursor: col-resize;"></div>
 
-        <div id="map" class="panel" style="padding-left: 12px;"></div>
-      </div>
-    </div>
-  </div>
+        <!-- Map Side -->
+        <div id="map-wrapper"
+          style="width: 45%; display:flex; flex-direction:column; min-width: 0; position: relative;">
 
-  <template id="legend">
-    <div class="legend">
-      <div id="legend-diffs">
-        <div class="legend-title">Diff Status</div>
-        <div class="lg-item"><span class="lg-swatch lg-unchanged"></span> Unchanged</div>
-        <div class="lg-item"><span class="lg-swatch lg-changed"></span> Changed</div>
-        <div class="lg-item"><span class="lg-swatch lg-added"></span> Added</div>
-        <div class="lg-item"><span class="lg-swatch lg-removed"></span> Removed</div>
-        <div class="lg-item"><span class="lg-swatch lg-selected"></span> Selected</div>
-      </div>
-      <div id="legend-results" style="display:none">
-        <div class="legend-title">% Diff (Results)</div>
-        <div class="lg-item"><span class="lg-swatch" style="background:#2ecc71"></span> Only in B (Added)</div>
-        <div class="lg-item"><span class="lg-swatch" style="background:#e74c3c"></span> Only in A (Removed)</div>
-        <div class="lg-item"><span class="lg-swatch" style="background:#00ff00"></span> > +20%</div>
-        <div class="lg-item"><span class="lg-swatch" style="background:#adff2f"></span> +5% to +20%</div>
-        <div class="lg-item"><span class="lg-swatch" style="background:#f39c12"></span> ±5%</div>
-        <div class="lg-item"><span class="lg-swatch" style="background:#cd5c5c"></span> -5% to -20%</div>
-        <div class="lg-item"><span class="lg-swatch" style="background:#ff0000"></span>
-          < -20%</div>
-            <div class="lg-item"><span class="lg-swatch" style="background:#7f8c8d"></span> No Change (Same)</div>
-            <div class="lg-item"><span class="lg-swatch lg-selected"></span> Selected</div>
-            <div style="margin-top:4px; font-size:10px; color:#555;">* Requires INP geom</div>
+          <div
+            style="padding: 8px; border-bottom: 1px solid var(--border-light); background: var(--bg-surface); display:flex; gap: 8px; align-items: center; justify-content: space-between;">
+            <span style="font-weight:600; font-size:12px;">MAP VIEW</span>
+
+            <div style="display:flex; gap:8px;">
+              <select id="crsSelect" style="padding: 4px; font-size: 11px;">
+                <option value="EPSG:3735" selected>NAD83 / Ohio South (ftUS)</option>
+                <option value="EPSG:3733">NAD83 / Ohio North (ftUS)</option>
+                <option value="EPSG:6499">NAD83 / Michigan South (ft)</option>
+                <option value="EPSG:2272">NAD83 / Pennsylvania South (ftUS)</option>
+              </select>
+              <select id="mapModeSelect" style="padding: 4px; font-size: 11px;">
+                <option value="Default" selected>Default View</option>
+                <option value="Changed">Focus: Changed</option>
+                <option value="Added">Focus: Added</option>
+                <option value="Removed">Focus: Removed</option>
+              </select>
+              <label class="checkbox-label" style="font-size:11px;"><input type="checkbox" id="labelsToggle" checked>
+                Labels</label>
+            </div>
+          </div>
+
+          <div id="map" style="flex:1;"></div>
+
+          <!-- Legacy Legend Template -->
+          <template id="legend">
+            <div class="map-legend">
+              <div style="font-weight:700; margin-bottom:8px;">Legend</div>
+              <div style="display:flex; align-items:center; gap:6px; margin-bottom:4px;"><span class="dot"
+                  style="background:var(--text-tertiary)"></span> Unchanged</div>
+              <div style="display:flex; align-items:center; gap:6px; margin-bottom:4px;"><span
+                  class="dot changed"></span> Changed</div>
+              <div style="display:flex; align-items:center; gap:6px; margin-bottom:4px;"><span class="dot added"></span>
+                Added</div>
+              <div style="display:flex; align-items:center; gap:6px; margin-bottom:4px;"><span
+                  class="dot removed"></span> Removed</div>
+              <div style="display:flex; align-items:center; gap:6px; margin-bottom:4px;"><span class="dot"
+                  style="background:#0ff; border:1px solid cyan;"></span> Selected</div>
+            </div>
+          </template>
+
         </div>
       </div>
-  </template>
-
-  <!-- Details Modal -->
-  <div id="modalBackdrop" onclick="if(event.target===this) closeModal()">
-    <div id="modal" role="dialog" aria-modal="true">
-      <header>
-        <h2 id="modalTitle">Details</h2>
-        <button onclick="closeModal()">Close</button>
-      </header>
-      <div class="body">
-        <div id="modalMeta" style="margin-bottom:8px;color:#555;"></div>
-        <div class="kv" id="modalGrid"></div>
-      </div>
-      <div class="foot">
-        <label style="margin-right:auto">
-          <input type="checkbox" id="onlyChangedBox" /> Show changed fields only
-        </label>
-        <button onclick="copyRowJSON()">Copy JSON</button>
-      </div>
-    </div>
+    </main>
   </div>
+
+  <!-- MODALS -->
 
   <!-- Run Comparison Modal -->
-  <div id="compareModalBackdrop"
-    style="position:fixed;inset:0;background:rgba(0,0,0,.35);display:none;align-items:center;justify-content:center;z-index:10000;"
-    onclick="if(event.target===this) closeCompareModal()">
-    <div id="compareModal"
-      style="background:#fff;border-radius:10px;border:1px solid #ddd;max-width:550px;width:90vw;display:flex;flex-direction:column;max-height:90vh;">
+  <div id="compareModalBackdrop" class="modal-backdrop">
+    <div id="compareModal" class="modal-content">
+      <div class="modal-header">
+        <h2>Run Comparison</h2>
+        <button class="icon-btn" onclick="closeCompareModal()">✕</button>
+      </div>
+      <div class="modal-body">
 
-      <header
-        style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:1px solid #eee;border-radius: 10px 10px 0 0;">
-        <h2 style="margin:0;font-size:16px">Comparison Input</h2>
+        <!-- Group 1 -->
+        <div class="input-group-container"
+          style="margin-bottom: 20px; border: 1px solid var(--border-light); padding: 15px; border-radius: 8px; background: var(--bg-body);">
+          <div style="font-weight: 600; margin-bottom: 10px; color: var(--text-primary); font-size: 13px;">Model 1</div>
+
+          <!-- INP 1 -->
+          <div
+            style="border: 1px dashed var(--border-medium); padding: 12px; border-radius: 6px; text-align: center; margin-bottom: 10px; position: relative;">
+            <label for="f1" class="btn secondary" style="width:100%; justify-content:center;">Choose .inp File</label>
+            <input id="f1" type="file" accept=".inp" style="display:none" />
+            <div id="f1-name" style="margin-top:6px; font-size:11px; color:var(--text-secondary);">No file selected
+            </div>
+          </div>
+
+          <!-- RPT 1 -->
+          <div
+            style="border: 1px dashed var(--border-medium); padding: 12px; border-radius: 6px; text-align: center; position: relative;">
+            <div
+              style="position: absolute; top: -1px; left: -1px; background: var(--bg-surface); border: 1px solid var(--border-medium); border-top-left-radius: 6px; border-bottom-right-radius: 6px; padding: 2px 8px; font-size: 10px; color: var(--text-tertiary); font-weight: 600; z-index: 1;">
+              OPTIONAL</div>
+            <label for="r1" class="btn secondary" style="width:100%; justify-content:center; margin-top: 8px;">Choose
+              Results .rpt</label>
+            <input id="r1" type="file" accept=".rpt,.txt" style="display:none" />
+            <div id="r1-name" style="margin-top:6px; font-size:11px; color:var(--text-secondary);">No file selected
+            </div>
+          </div>
+        </div>
+
+        <!-- Group 2 -->
+        <div class="input-group-container"
+          style="margin-bottom: 20px; border: 1px solid var(--border-light); padding: 15px; border-radius: 8px; background: var(--bg-body);">
+          <div style="font-weight: 600; margin-bottom: 10px; color: var(--text-primary); font-size: 13px;">Model 2</div>
+
+          <!-- INP 2 -->
+          <div
+            style="border: 1px dashed var(--border-medium); padding: 12px; border-radius: 6px; text-align: center; margin-bottom: 10px; position: relative;">
+            <label for="f2" class="btn secondary" style="width:100%; justify-content:center;">Choose .inp File</label>
+            <input id="f2" type="file" accept=".inp" style="display:none" />
+            <div id="f2-name" style="margin-top:6px; font-size:11px; color:var(--text-secondary);">No file selected
+            </div>
+          </div>
+
+          <!-- RPT 2 -->
+          <div
+            style="border: 1px dashed var(--border-medium); padding: 12px; border-radius: 6px; text-align: center; position: relative;">
+            <div
+              style="position: absolute; top: -1px; left: -1px; background: var(--bg-surface); border: 1px solid var(--border-medium); border-top-left-radius: 6px; border-bottom-right-radius: 6px; padding: 2px 8px; font-size: 10px; color: var(--text-tertiary); font-weight: 600; z-index: 1;">
+              OPTIONAL</div>
+            <label for="r2" class="btn secondary" style="width:100%; justify-content:center; margin-top: 8px;">Choose
+              Results .rpt</label>
+            <input id="r2" type="file" accept=".rpt,.txt" style="display:none" />
+            <div id="r2-name" style="margin-top:6px; font-size:11px; color:var(--text-secondary);">No file selected
+            </div>
+          </div>
+        </div>
+
+        <button id="toggleTolerances" class="btn"
+          style="width:100%; justify-content:space-between; margin-bottom:12px;">
+          <span>Tolerance Options</span>
+          <span id="tolArrow">▶</span>
+        </button>
+
+        <div id="toleranceOptions" style="display:none; grid-template-columns: 1fr 1fr; gap: 12px;">
+          <label class="flex-col gap-2">Conduit Length <input type="number" id="tol_conduit_length" value="0"
+              step="0.1"></label>
+          <label class="flex-col gap-2">Junc Invert <input type="number" id="tol_junction_invert" value="0"
+              step="0.01"></label>
+          <label class="flex-col gap-2">Conduit Offset <input type="number" id="tol_conduit_offset" value="0"
+              step="0.01"></label>
+          <label class="flex-col gap-2">Junc Max Depth <input type="number" id="tol_junction_depth" value="0"
+              step="0.01"></label>
+          <label class="flex-col gap-2">Roughness <input type="number" id="tol_conduit_roughness" value="0"
+              step="0.001"></label>
+        </div>
+
+      </div>
+      <div class="modal-footer">
         <button onclick="closeCompareModal()">Cancel</button>
-      </header>
+        <button id="runCompareFromModal" class="primary">Compare Files</button>
+      </div>
+    </div>
+  </div>
 
-      <div class="body" style="padding:10px 14px;overflow:auto; display: grid; grid-template-columns: 1fr; gap: 12px;">
-        <h3
-          style="grid-column: 1 / -1; margin: 0; font-size: 14px; border-bottom: 1px solid #eee; padding-bottom: 8px;">
-          Model Files (INP)</h3>
-        <div class="file-input-container">
-          <label for="f1" class="file-btn-label" style="color: #222; border-color: #ccc;">First .inp</label>
-          <input id="f1" type="file" accept=".inp,.txt" />
-          <span id="f1-name" class="file-name-display" style="color: #555;">No file selected</span>
-        </div>
-        <div class="file-input-container">
-          <label for="f2" class="file-btn-label" style="color: #222; border-color: #ccc;">Second .inp</label>
-          <input id="f2" type="file" accept=".inp,.txt" />
-          <span id="f2-name" class="file-name-display" style="color: #555;">No file selected</span>
-        </div>
-
-        <h3
-          style="grid-column: 1 / -1; margin: 10px 0 0 0; font-size: 14px; border-bottom: 1px solid #eee; padding-bottom: 8px;">
-          Result Reports (RPT) <span style="font-weight:normal;color:#666;font-size:11px;">(Optional)</span></h3>
-        <div class="file-input-container">
-          <label for="r1" class="file-btn-label" style="color: #222; border-color: #ccc;">First .rpt</label>
-          <input id="r1" type="file" accept=".rpt,.txt" />
-          <span id="r1-name" class="file-name-display" style="color: #555;">(None)</span>
-        </div>
-        <div class="file-input-container">
-          <label for="r2" class="file-btn-label" style="color: #222; border-color: #ccc;">Second .rpt</label>
-          <input id="r2" type="file" accept=".rpt,.txt" />
-          <span id="r2-name" class="file-name-display" style="color: #555;">(None)</span>
+  <!-- Details Modal -->
+  <div id="modalBackdrop" class="modal-backdrop">
+    <div id="modal" class="modal-content">
+      <div class="modal-header">
+        <h2 id="modalTitle">Details</h2>
+        <button class="icon-btn" onclick="closeModal()">✕</button>
+      </div>
+      <div class="modal-body">
+        <div id="modalMeta" style="margin-bottom:16px;"></div>
+        <div class="kv" id="modalGrid"
+          style="display: grid; grid-template-columns: 140px 1fr 1fr; gap: 1px; background: var(--border-medium); border: 1px solid var(--border-medium);">
+          <!-- Cell content injected by JS -->
         </div>
       </div>
-
-      <div class="body"
-        style="padding:10px 14px;overflow:auto; display: grid; grid-template-columns: 1fr 1fr; gap: 12px 20px;">
-        <h3
-          style="grid-column: 1 / -1; margin: 0; font-size: 14px; border-bottom: 1px solid #eee; padding-bottom: 8px;">
-          Numerical Tolerances</h3>
-        <p style="grid-column: 1 / -1; margin: 0 0 8px 0; font-size: 12px; color: #555;">
-          Differences between files based on the fields below will be ignored if the absolute difference is less than or
-          equal to the specified
-          tolerance.
-        </p>
-        <label>Conduit: Length
-          <input type="number" id="tol_conduit_length" value="0" step="0.1" class="tol-input">
+      <div class="modal-footer">
+        <label style="margin-right:auto; display:flex; align-items:center; gap:8px;">
+          <input type="checkbox" id="onlyChangedBox" /> Only show changed
         </label>
-        <label>Junction: Invert Elev
-          <input type="number" id="tol_junction_invert" value="0" step="0.01" class="tol-input">
-        </label>
-        <label>Conduit: In/Out Offset
-          <input type="number" id="tol_conduit_offset" value="0" step="0.01" class="tol-input">
-        </label>
-        <label>Junction: Max Depth
-          <input type="number" id="tol_junction_depth" value="0" step="0.01" class="tol-input">
-        </label>
-        <label>Conduit: Roughness
-          <input type="number" id="tol_conduit_roughness" value="0" step="0.001" class="tol-input">
-        </label>
-      </div>
-
-      <div class="foot"
-        style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-radius: 0px 0px 20px 20px;">
-        <button id="runCompareFromModal" class="primary" style="min-width: 120px;">Run Comparison</button>
+        <button onclick="closeModal()">Close</button>
       </div>
     </div>
   </div>
 
   <!-- Help Modal -->
-  <div id="helpModalBackdrop"
-    style="position:fixed;inset:0;background:rgba(0,0,0,.35);display:none;align-items:center;justify-content:center;z-index:10000;"
-    onclick="if(event.target===this) closeHelpModal()">
-    <div id="helpModal"
-      style="background:#fff;border-radius:10px;border:1px solid #ddd;max-width:600px;width:90vw;max-height:80vh;display:flex;flex-direction:column;">
+  <div id="helpModalBackdrop" class="modal-backdrop">
+    <div id="helpModal" class="modal-content">
+      <div class="modal-header">
+        <h2>Help</h2>
+        <button class="icon-btn" onclick="closeHelpModal()">✕</button>
+      </div>
+      <div class="modal-body">
+        <div style="line-height: 1.6;">
+          <h3 style="font-size:14px; margin-bottom:8px; color:var(--primary);">1. Getting Started</h3>
+          <ul style="margin:0 0 16px 0; padding-left:20px;">
+            <li>Click <strong>Run Comparison</strong> to open the setup dialog.</li>
+            <li>Select two input files (<strong>.inp</strong> or <strong>.txt</strong>).</li>
+            <li>(Optional) Expand <strong>Tolerance Options</strong> to ignore minor differences.</li>
+            <li>Click <strong>Compare Files</strong> to generate the report.</li>
+          </ul>
 
-      <header
-        style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:1px solid #eee;border-radius: 10px 10px 0 0;">
-        <h2 style="margin:0;font-size:16px">How to Use This App</h2>
+          <h3 style="font-size:14px; margin-bottom:8px; color:var(--primary);">2. Navigating Results</h3>
+          <ul style="margin:0 0 16px 0; padding-left:20px;">
+            <li>Use the <strong>Sections</strong> sidebar to switch between data tables (e.g., Junctions, Conduits).
+            </li>
+            <li><strong>Filter Buttons</strong> (top toolbar) show/hide Added, Removed, or Changed items.</li>
+            <li>Use the <strong>Search</strong> bar to find specific element IDs.</li>
+            <li><strong>Double-click</strong> any row (or click the <strong>Details</strong> icon) to see a full
+              field-by-field comparison.</li>
+          </ul>
+
+          <h3 style="font-size:14px; margin-bottom:8px; color:var(--primary);">3. Using the Map</h3>
+          <ul style="margin:0 0 16px 0; padding-left:20px;">
+            <li>Elements are colored by status: <span style="color:var(--added); font-weight:600;">Green (Added)</span>,
+              <span style="color:var(--removed); font-weight:600;">Red (Removed)</span>, <span
+                style="color:var(--changed); font-weight:600;">Orange (Changed)</span>.
+            </li>
+            <li>Use the <strong>Map View Mode</strong> dropdown (top of map) to focus on specific changes.</li>
+            <li><strong>Click</strong> an element on the map to see its status and changes popup.</li>
+            <li>Toggle <strong>Labels</strong> to see element IDs at high zoom levels.</li>
+          </ul>
+
+          <h3 style="font-size:14px; margin-bottom:8px; color:var(--primary);">4. Export & Save</h3>
+          <ul style="margin:0 0 16px 0; padding-left:20px;">
+            <li><strong>File > Save Session:</strong> Saves your current comparison to a <code>.sca</code> file to
+              reload later.</li>
+            <li><strong>File > Export Excel:</strong> Downloads a detailed .xlsx report of all differences.</li>
+            <li><strong>File > Export Shapefile:</strong> Generates GIS files for the added/removed/changed elements.
+            </li>
+          </ul>
+        </div>
+      </div>
+      <div class="modal-footer">
         <button onclick="closeHelpModal()">Close</button>
-      </header>
-
-      <div class="body" style="padding:10px 14px;overflow:auto">
-        <p>
-          This application compares two SWMM <code>.inp</code> files to identify differences in their
-          structure and parameters. It is still in testing and may miss edge cases, so results should
-          be reviewed before use in design or modeling.
-        </p>
-
-        <ul>
-          <li><strong>File:</strong> Use the <strong>File</strong> menu to save the current comparison,
-            load a previous comparison, or export the differences to an Excel file.</li>
-
-          <li><strong>Map:</strong> Use the <strong>Map</strong> menu to switch between the street and
-            aerial basemaps, change the coordinate system (CRS), or toggle node/subcatchment labels on or off.</li>
-
-          <li><strong>Run Comparison:</strong> Select your “First” and “Second” <code>.inp</code> files,
-            then specify numerical tolerances to control which parameter differences are counted as
-            changes.</li>
-
-          <li><strong>Sections:</strong> The <strong>Sections</strong> panel shows a high-level count of
-            added, removed, and changed elements for each SWMM section. Click a section to load a detailed
-            table of changes in the <strong>Details</strong> panel.</li>
-
-          <li><strong>Details:</strong> The <strong>Details</strong> panel shows a table of changes for
-            the currently selected section.
-            <ul>
-              <li>Click a row to pan and zoom the map to that element and highlight it in cyan.</li>
-              <li>Use the <strong>Added</strong>, <strong>Removed</strong>, and <strong>Changed</strong>
-                toggles to filter which elements are shown.</li>
-              <li>Use <strong>Show Diffs</strong> (where available) to show old vs. new values side-by-side
-                for selected sections.</li>
-              <li>Use the filter box to search for specific element IDs or parameter values within the table.</li>
-              <li>Double-click a row to open a pop-up with additional detail for that change. This is
-                especially used to display RTK changes in the <strong>HYDROGRAPHS</strong> section, which
-                are not fully shown in the table.</li>
-            </ul>
-          </li>
-
-          <li><strong>Using the Map:</strong>
-            <ul>
-              <li><strong>Pan and zoom:</strong> Drag to pan and use the mouse wheel or zoom controls to zoom in and
-                out.
-                The map automatically zooms to show all loaded geometry when a comparison is drawn.</li>
-              <li><strong>Click to inspect features:</strong> Click near a node, link, or subcatchment to open a pop-up.
-                The tool prioritizes nodes, then links, then subcatchments when multiple features overlap.</li>
-              <li><strong>Cycle through overlapping features:</strong> If several elements are under the same click,
-                use the left/right arrow buttons in the pop-up to cycle through them.</li>
-              <li><strong>Highlighting:</strong> When an element is selected (from the table or the map),
-                it is outlined in cyan on the map and the corresponding row is highlighted in the Details table.</li>
-              <li><strong>Labels:</strong> When labels are enabled, node and subcatchment IDs appear on the map at
-                higher zoom levels. Turn these on or off using the <strong>Map &gt; Labels</strong> option.</li>
-              <li><strong>Legend and colors:</strong> The legend in the lower-left corner shows the color
-                scheme: unchanged (gray), changed (orange), added (green), removed (red), and the cyan
-                selection highlight.</li>
-            </ul>
-          </li>
-        </ul>
       </div>
     </div>
   </div>

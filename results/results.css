@@ -1,0 +1,110 @@
+/* results/results.css */
+
+/* Tab Navigation */
+.tabs {
+    display: flex;
+    border-bottom: 1px solid var(--border-medium);
+    background: var(--bg-surface);
+    margin-bottom: 0;
+}
+
+.tab-btn {
+    padding: 10px 20px;
+    cursor: pointer;
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    font-weight: 500;
+    color: var(--text-secondary);
+    transition: all 0.2s;
+}
+
+.tab-btn:hover {
+    color: var(--primary);
+    background: var(--bg-surface-hover);
+}
+
+.tab-btn.active {
+    color: var(--primary);
+    border-bottom-color: var(--primary);
+    font-weight: 600;
+}
+
+/* Results Container */
+#results-view {
+    display: none;
+    /* Hidden by default */
+    flex: 1;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+#results-view.active {
+    display: flex;
+}
+
+/* Results Toolbar */
+.results-toolbar {
+    padding: 8px;
+    border-bottom: 1px solid var(--border-medium);
+    background: var(--bg-surface);
+    display: flex;
+    gap: 12px;
+    align-items: center;
+}
+
+/* Results Table */
+.results-table-container {
+    flex: 1;
+    overflow: auto;
+}
+
+.results-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+}
+
+.results-table th,
+.results-table td {
+    border: 1px solid var(--border-light);
+    padding: 6px 8px;
+    text-align: left;
+}
+
+.results-table th {
+    background: var(--bg-surface-hover);
+    font-weight: 600;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+.results-table tr.changed td {
+    background-color: rgba(245, 158, 11, 0.1);
+}
+
+.results-table tr.only-in-a td {
+    background-color: rgba(239, 68, 68, 0.1);
+    /* Red-ish */
+}
+
+.results-table tr.only-in-b td {
+    background-color: rgba(16, 185, 129, 0.1);
+    /* Green-ish */
+}
+
+/* Map Color Scale Controls */
+.scale-control {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+}
+
+.scale-input {
+    width: 60px;
+    padding: 2px 4px;
+    border: 1px solid var(--border-medium);
+    border-radius: 4px;
+}

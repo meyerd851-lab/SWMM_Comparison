@@ -1,6 +1,7 @@
 // map.js - Map functionality (Leaflet, geometry drawing, labels, popups, highlighting)
 import { state } from './state.js';
 import { escapeHtml, throttle, relabelHeaders } from './utils.js';
+import { ShapeMarker } from './ShapeMarker.js';
 
 // Map initialization
 export const map = L.map('map', { zoomControl: true, maxZoom: 22, renderer: L.canvas() }).setView([39.1031, -84.5120], 12);
@@ -9,8 +10,21 @@ export const map = L.map('map', { zoomControl: true, maxZoom: 22, renderer: L.ca
 map.createPane('subcatchmentPane').style.zIndex = 380;
 map.createPane('linkPane').style.zIndex = 390;
 map.createPane('nodePane').style.zIndex = 410;
+map.createPane('selectPane').style.zIndex = 420; // Above nodes
 
-// Basemap layers
+// Create Renderers to enforce Canvas usage
+const subRenderer = L.canvas({ pane: 'subcatchmentPane' });
+const linkRenderer = L.canvas({ pane: 'linkPane' });
+const nodeRenderer = L.canvas({ pane: 'nodePane' });
+const selectRenderer = L.canvas({ pane: 'selectPane' });
+
+// Global access for results.js
+window.mapLayers = {
+  nodes: nodeRenderer,
+  links: linkRenderer,
+  subs: subRenderer
+};
+
 // Basemap layers
 const baseLayers = {
   "Street": L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -19,25 +33,30 @@ const baseLayers = {
   "Aerial": L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
     attribution: 'Tiles &copy; Esri'
   }),
-  "None": L.tileLayer('', { opacity: 0 }) // Dummy layer for "None"
+  "None": L.tileLayer('', { opacity: 0 })
 };
 
 // Default basemap
 baseLayers["Street"].addTo(map);
 
-// Remove manual setBasemap export, let Leaflet handle it via Control
 export function setBasemap(which) {
-  // Compatibility stub if called from elsewhere, but mostly unused now
+  // Compatibility stub
 }
 
-// Add legend control
-map.addControl(new (L.Control.extend({
-  onAdd() { return document.getElementById('legend').content.firstElementChild.cloneNode(true); }
-}))({ position: "bottomleft" }));
+// Add legend control container
+const legendControl = L.Control.extend({
+  onAdd: function () {
+    const lg = L.DomUtil.create('div', 'map-legend legend leaflet-control');
+    lg.id = 'map-legend';
+    // Initial content
+    lg.innerHTML = '<div style="font-weight:700; margin-bottom:8px;">Legend</div>';
+    return lg;
+  }
+});
+map.addControl(new legendControl({ position: "bottomleft" }));
+
 
 // Layer groups
-// Layer groups
-// Parent groups for toggling
 const overlayGroups = {
   nodes: L.layerGroup().addTo(map),
   links: L.layerGroup().addTo(map),
@@ -51,20 +70,35 @@ export const layers = {
   select: L.layerGroup().addTo(map)
 };
 
-export const C = { unchanged: "#7f8c8d", changed: "#f39c12", added: "#2ecc71", removed: "#e74c3c", select: "#00FFFF" };
+export function clearMap() {
+  layers.select.clearLayers();
+  Object.values(layers.nodes).forEach(g => g.clearLayers());
+  Object.values(layers.links).forEach(g => g.clearLayers());
+  Object.values(layers.subs).forEach(g => g.clearLayers());
+}
+
+export const C = { unchanged: "#9ca3af", changed: "#f59e0b", added: "#10b981", removed: "#ef4444", select: "#00FFFF" };
 
 // --- COORDINATE & GEOMETRY HELPERS ---
 
 export function xyToLatLng(x, y) {
-  const [lon, lat] = proj4(state.CURRENT_CRS, "EPSG:4326", [x, y]);
-  return [lat, lon];
+  // Use projection from state, default to EPSG:4326 if not set (or if raw coords)
+  // Assuming projections are handled by proj4 if loaded
+  if (state.CURRENT_CRS && state.CURRENT_CRS !== "EPSG:4326" && window.proj4) {
+    try {
+      const [lon, lat] = proj4(state.CURRENT_CRS, "EPSG:4326", [x, y]);
+      return [lat, lon];
+    } catch (e) {
+      return [y, x];
+    }
+  }
+  return [y, x];
 }
 
 export function coordsToLatLng(coords) {
   return coords.map(p => xyToLatLng(p[0], p[1]));
 }
 
-// Helper: Calculate midpoint of a line string
 function midOfLine(coords) {
   if (!coords || coords.length === 0) return null;
   if (coords.length === 1) return coords[0];
@@ -89,7 +123,6 @@ function midOfLine(coords) {
   return coords[Math.floor(coords.length / 2)];
 }
 
-// Helper: Calculate centroid of a polygon
 function centroidOfPoly(coords) {
   if (!coords || coords.length === 0) return null;
   let x = 0, y = 0;
@@ -97,7 +130,6 @@ function centroidOfPoly(coords) {
   return [x / coords.length, y / coords.length];
 }
 
-// Helper: Ray-casting algorithm for Point-in-Polygon selection
 function isPointInPoly(pt, poly) {
   let x = pt.lat, y = pt.lng;
   let inside = false;
@@ -111,7 +143,6 @@ function isPointInPoly(pt, poly) {
   return inside;
 }
 
-// Helper: Get closest point on segment in pixels
 function getClosestPointOnSegment(p, a, b) {
   let x = p.x, y = p.y;
   let x1 = a.x, y1 = a.y;
@@ -128,15 +159,12 @@ function getClosestPointOnSegment(p, a, b) {
   return { x: xx, y: yy, t: param, distSq: (x - xx) ** 2 + (y - yy) ** 2 };
 }
 
-// Helper: Check if a click is on a link (pixel-based + middle 80% rule)
 function isClickOnLink(containerPoint, layer, tolerancePx) {
   const pts = layer.getLatLngs();
   const segments = Array.isArray(pts[0]) ? pts : [pts];
 
   for (const line of segments) {
     const pxPoints = line.map(ll => map.latLngToContainerPoint(ll));
-
-    // 1. Calculate total length
     let totalLen = 0;
     const segLens = [];
     for (let i = 0; i < pxPoints.length - 1; i++) {
@@ -144,10 +172,8 @@ function isClickOnLink(containerPoint, layer, tolerancePx) {
       segLens.push(d);
       totalLen += d;
     }
-
     if (totalLen === 0) continue;
 
-    // 2. Find closest point and its station
     let minDstSq = Infinity;
     let bestStation = -1;
     let currentStation = 0;
@@ -161,7 +187,6 @@ function isClickOnLink(containerPoint, layer, tolerancePx) {
       currentStation += segLens[i];
     }
 
-    // 3. Check tolerance and range (10% buffer on each end)
     if (Math.sqrt(minDstSq) <= tolerancePx) {
       const ratio = bestStation / totalLen;
       if (ratio >= 0.1 && ratio <= 0.9) return true;
@@ -172,22 +197,11 @@ function isClickOnLink(containerPoint, layer, tolerancePx) {
 
 // --- LOGIC HELPERS ---
 
-export const secType = (sec) => {
-  if (!sec) return null;
-  const s = sec.toUpperCase();
-  // INP standard names
-  if (["JUNCTIONS", "OUTFALLS", "DIVIDERS", "STORAGE"].includes(s)) return "nodes";
-  if (["CONDUITS", "PUMPS", "ORIFICES", "WEIRS", "OUTLETS"].includes(s)) return "links";
-  if (s === "SUBCATCHMENTS") return "subs";
-
-  // RPT fuzzy names
-  const sl = sec.toLowerCase();
-  if (sl.includes('node') || sl.includes('outfall') || sl.includes('storage')) return 'nodes';
-  if (sl.includes('link') || sl.includes('conduit') || sl.includes('pump')) return 'links';
-  if (sl.includes('subcatchment')) return 'subs';
-
-  return null;
-};
+export const secType = (sec) => (
+  ["JUNCTIONS", "OUTFALLS", "DIVIDERS", "STORAGE"].includes(sec) ? "nodes" :
+    ["CONDUITS", "PUMPS", "ORIFICES", "WEIRS", "OUTLETS"].includes(sec) ? "links" :
+      sec === "SUBCATCHMENTS" ? "subs" : null
+);
 
 export function buildSets(diffs, renames) {
   const sets = {
@@ -215,14 +229,27 @@ const LABEL_ZOOM_THRESHOLD = 17;
 
 export function drawLabels(json) {
   labelsLayer.clearLayers();
-  if (!document.getElementById('labelsToggle').checked) return;
+  if (!document.getElementById('labelsToggle')?.checked) return;
   if (map.getZoom() < LABEL_ZOOM_THRESHOLD) return;
 
   const geom = json.geometry;
   const bounds = map.getBounds();
 
+  // Filter Logic
+  let validNodes = null;
+  let validSubs = null;
+
+  if (currentFilterMode !== 'Default') {
+    const sets = buildSets(json.diffs, json.renames);
+    const modeKey = currentFilterMode.toLowerCase(); // 'added', 'removed', 'changed'
+    validNodes = sets.nodes[modeKey];
+    validSubs = sets.subs[modeKey];
+  }
+
   const nodeKeys = new Set([...(Object.keys(geom.nodes2 || {})), ...(Object.keys(geom.nodes1 || {}))]);
   nodeKeys.forEach(id => {
+    if (validNodes && !validNodes.has(id)) return;
+
     const xy = (geom.nodes2 && geom.nodes2[id]) || (geom.nodes1 && geom.nodes1[id]);
     if (!xy) return;
     const ll = xyToLatLng(xy[0], xy[1]);
@@ -234,6 +261,8 @@ export function drawLabels(json) {
 
   const subKeys = new Set([...(Object.keys(geom.subs2 || {})), ...(Object.keys(geom.subs1 || {}))]);
   subKeys.forEach(id => {
+    if (validSubs && !validSubs.has(id)) return;
+
     const coords = (geom.subs2 && geom.subs2[id]) || (geom.subs1 && geom.subs1[id]);
     if (!coords || coords.length < 3) return;
     const centerXY = centroidOfPoly(coords);
@@ -258,7 +287,7 @@ function resetLayers() {
   });
 }
 
-export function drawGeometry(json) {
+export function drawGeometry(json, fitBounds = true) {
   resetLayers();
   const geom = json.geometry;
   const sets = buildSets(json.diffs, json.renames);
@@ -275,20 +304,55 @@ export function drawGeometry(json) {
   };
 
   const nodeSections = ["JUNCTIONS", "OUTFALLS", "DIVIDERS", "STORAGE"];
-  const nodeIdToSection = {};
+  const idToSec1 = {};
+  const idToSec2 = {};
+
   for (const sec of nodeSections) {
     if (json.sections1 && json.sections1[sec]) {
-      for (const id in json.sections1[sec]) nodeIdToSection[id] = sec;
+      for (const id in json.sections1[sec]) idToSec1[id] = sec;
+    }
+    if (json.sections2 && json.sections2[sec]) {
+      for (const id in json.sections2[sec]) idToSec2[id] = sec;
     }
   }
 
-  const drawNode = (id, xy, color, target) => {
+  const drawNode = (id, xy, color, target, sourceNum) => {
     const ll = xyToLatLng(xy[0], xy[1]);
-    const sec = nodeIdToSection[id] || "JUNCTIONS";
-    const marker = L.circleMarker(ll, {
-      radius: 5, color: "#000", weight: 1, fillColor: color, fillOpacity: 1, pane: 'nodePane'
+
+    // Choose correct section lookup based on source state
+    let sec;
+    if (sourceNum === 1) sec = idToSec1[id];
+    else if (sourceNum === 2) sec = idToSec2[id];
+
+    // Fallback? Should exist if valid ID.
+    if (!sec) sec = (idToSec1[id] || idToSec2[id] || "JUNCTIONS");
+
+    let shape = 'circle';
+    let radius = 5;
+
+    if (sec === 'STORAGE') {
+      shape = 'square';
+      radius = 6; // Slightly larger for visibility
+    } else if (sec === 'OUTFALLS') {
+      shape = 'triangle';
+      radius = 6;
+    } else if (sec === 'DIVIDERS') {
+      shape = 'diamond';
+      radius = 5.5;
+    }
+
+    const marker = new ShapeMarker(ll, {
+      radius: radius,
+      color: "#000",
+      weight: 1,
+      fillColor: color,
+      fillOpacity: 1,
+      pane: 'nodePane',
+      renderer: nodeRenderer,
+      shape: shape
     });
-    marker.swmmInfo = { id, section: sec, type: 'node' };
+    const isRemoved = target === 'removed';
+    marker.swmmInfo = { id, section: sec, type: 'node', isRemoved };
     marker.addTo(layers.nodes[target]);
   };
 
@@ -301,28 +365,43 @@ export function drawGeometry(json) {
 
   const drawLink = (id, coords, color, target) => {
     const ll = coords.map(p => xyToLatLng(p[0], p[1]));
-    const polyline = L.polyline(ll, { color, weight: 3, opacity: .95, pane: 'linkPane' });
+    const polyline = L.polyline(ll, {
+      color,
+      weight: 3,
+      opacity: .95,
+      pane: 'linkPane',
+      renderer: linkRenderer
+    });
     const sec = linkIdToSection[id] || 'CONDUITS';
-    polyline.swmmInfo = { id, section: sec, type: 'link' };
+    const isRemoved = target === 'removed';
+    polyline.swmmInfo = { id, section: sec, type: 'link', isRemoved };
     polyline.addTo(layers.links[target]);
   };
 
   const drawSub = (id, coords, color, target) => {
     const ll = coords.map(p => xyToLatLng(p[0], p[1]));
-    const polygon = L.polygon(ll, { color, weight: 2, fill: true, fillOpacity: .25, pane: 'subcatchmentPane' });
-    polygon.swmmInfo = { id, section: 'SUBCATCHMENTS', type: 'sub' };
+    const polygon = L.polygon(ll, {
+      color,
+      weight: 2,
+      fill: true,
+      fillOpacity: .25,
+      pane: 'subcatchmentPane',
+      renderer: subRenderer
+    });
+    const isRemoved = target === 'removed';
+    polygon.swmmInfo = { id, section: 'SUBCATCHMENTS', type: 'sub', isRemoved };
     polygon.addTo(layers.subs[target]);
   };
 
-  for (const id of unchanged.nodes) if (geom.nodes1?.[id]) drawNode(id, geom.nodes1[id], C.unchanged, "unchanged");
-  for (const id of sets.nodes.removed) if (geom.nodes1?.[id]) drawNode(id, geom.nodes1[id], C.removed, "removed");
+  for (const id of unchanged.nodes) if (geom.nodes1?.[id]) drawNode(id, geom.nodes1[id], C.unchanged, "unchanged", 1);
+  for (const id of sets.nodes.removed) if (geom.nodes1?.[id]) drawNode(id, geom.nodes1[id], C.removed, "removed", 1);
   for (const id of unchanged.links) if (geom.links1?.[id]) drawLink(id, geom.links1[id], C.unchanged, "unchanged");
   for (const id of sets.links.removed) if (geom.links1?.[id]) drawLink(id, geom.links1[id], C.removed, "removed");
   for (const id of unchanged.subs) if (geom.subs1?.[id]) drawSub(id, geom.subs1[id], C.unchanged, "unchanged");
   for (const id of sets.subs.removed) if (geom.subs1?.[id]) drawSub(id, geom.subs1[id], C.removed, "removed");
 
-  for (const id of sets.nodes.changed) { const xy = geom.nodes2?.[id]; if (xy) drawNode(id, xy, C.changed, "changed"); }
-  for (const id of sets.nodes.added) if (geom.nodes2?.[id]) drawNode(id, geom.nodes2[id], C.added, "added");
+  for (const id of sets.nodes.changed) { const xy = geom.nodes2?.[id]; if (xy) drawNode(id, xy, C.changed, "changed", 2); }
+  for (const id of sets.nodes.added) if (geom.nodes2?.[id]) drawNode(id, geom.nodes2[id], C.added, "added", 2);
   for (const id of sets.links.changed) { const ll = geom.links2?.[id]; if (ll) drawLink(id, ll, C.changed, "changed"); }
   for (const id of sets.links.added) if (geom.links2?.[id]) drawLink(id, geom.links2[id], C.added, "added");
   for (const id of sets.subs.changed) { const poly = geom.subs2?.[id]; if (poly) drawSub(id, poly, C.changed, "changed"); }
@@ -340,27 +419,41 @@ export function drawGeometry(json) {
     });
   };
   pushAll(geom.nodes1); pushAll(geom.nodes2); pushAll(geom.links1); pushAll(geom.links2); pushAll(geom.subs1); pushAll(geom.subs2);
-  if (anyLL.length) map.fitBounds(L.latLngBounds(anyLL), { padding: [20, 20] });
+
+  if (anyLL.length && fitBounds) {
+    map.fitBounds(L.latLngBounds(anyLL), { padding: [20, 20] });
+  }
 
   throttledDrawLabels();
+  setMapFilter(currentFilterMode);
 }
+
+// ... HIGHLIGHTING ... (omitted for brevity, assume unchanged or handle overlap)
+// Actually I need to be careful with line numbers. I am replacing from 290 to 1203? NO!
+// I must validly replace the blocks.
+// I will use replace_file_content with smaller chunks or handle it correctly.
+// The code below is a full replacement of drawGeometry AND updateLegend?
+// Wait, I can't replace from 290 to 1203 because there is a lot of code in between (highlighting, popups, etc).
+// I should make TWO separate tool calls or ONE MultiReplace.
+// I'll use MultiReplace.
+
 
 // --- HIGHLIGHTING ---
 
-export function highlightElement(section, id, shouldZoom = false) {
+export function highlightElement(section, id, shouldZoom = false, isRemoved = false, skipScroll = false) {
   layers.select.clearLayers();
 
   // Highlight table row
-  document.querySelectorAll('#table .row.highlighted').forEach(r => r.classList.remove('highlighted'));
+  document.querySelectorAll('#table tr.selected').forEach(r => r.classList.remove('selected'));
   const safeId = id.replace(/[^a-zA-Z0-9]/g, '_');
   const row = document.querySelector(`#table .row-id-${safeId}`);
+
   if (row) {
-    row.classList.add('highlighted');
-    // Force visual style
-    const old = row.style.backgroundColor;
-    row.style.backgroundColor = '#ffff99';
-    setTimeout(() => { row.style.backgroundColor = old; }, 2000);
-    row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    row.classList.add('selected');
+    // Only dispatch the event (which triggers scroll) if we NOT skipping scroll
+    if (!skipScroll) {
+      row.dispatchEvent(new Event('highlight'));
+    }
   }
 
   const t = secType(section);
@@ -369,20 +462,55 @@ export function highlightElement(section, id, shouldZoom = false) {
   const g1 = state.LAST.json.geometry[t === 'nodes' ? 'nodes1' : t === 'links' ? 'links1' : 'subs1'];
   const g2 = state.LAST.json.geometry[t === 'nodes' ? 'nodes2' : t === 'links' ? 'links2' : 'subs2'];
 
-  const geo = (g2 && g2[id] !== undefined) ? g2[id] : (g1 ? g1[id] : undefined);
+  // If isRemoved, prefer g1. If not, prefer g2 but fallback to g1.
+  let geo;
+  if (isRemoved) {
+    geo = g1 ? g1[id] : undefined;
+  } else {
+    geo = (g2 && g2[id] !== undefined) ? g2[id] : (g1 ? g1[id] : undefined);
+  }
 
   if (!geo) return;
   if (t === 'nodes') {
     const ll = xyToLatLng(geo[0], geo[1]);
-    L.circleMarker(ll, { radius: 10, color: C.select, weight: 4, fill: false, opacity: .95 }).addTo(layers.select);
+
+    let shape = 'circle';
+    if (section === 'STORAGE') shape = 'square';
+    else if (section === 'OUTFALLS') shape = 'triangle';
+    else if (section === 'DIVIDERS') shape = 'diamond';
+
+    new ShapeMarker(ll, {
+      radius: 12,
+      color: C.select,
+      weight: 4,
+      fill: false,
+      opacity: .95,
+      shape: shape,
+      pane: 'selectPane',
+      renderer: selectRenderer
+    }).addTo(layers.select);
+
     if (shouldZoom) map.flyTo(ll, 18, { duration: 0.5 });
   } else if (t === 'links') {
     const ll = geo.map(p => xyToLatLng(p[0], p[1]));
-    L.polyline(ll, { color: C.select, weight: 8, opacity: .8 }).addTo(layers.select);
+    L.polyline(ll, {
+      color: C.select,
+      weight: 8,
+      opacity: .8,
+      pane: 'selectPane',
+      renderer: selectRenderer
+    }).addTo(layers.select);
     if (shouldZoom) map.fitBounds(L.latLngBounds(ll), { padding: [50, 50], maxZoom: 18 });
   } else if (t === 'subs') {
     const ll = geo.map(p => xyToLatLng(p[0], p[1]));
-    L.polygon(ll, { color: C.select, weight: 5, fill: false, opacity: .95 }).addTo(layers.select);
+    L.polygon(ll, {
+      color: C.select,
+      weight: 5,
+      fill: false,
+      opacity: .95,
+      pane: 'selectPane',
+      renderer: selectRenderer
+    }).addTo(layers.select);
     if (shouldZoom) map.fitBounds(L.latLngBounds(ll), { padding: [50, 50], maxZoom: 18 });
   }
 }
@@ -399,7 +527,8 @@ window.cycleMapPopup = function (direction) {
   showMapPopup(lastClickLatLng, lastClickedElements, false);
 };
 
-function generatePopupContent(section, id) {
+
+function generatePopupContent(section, id, expectedState) {
   const { diffs, headers, renames } = state.LAST.json || {};
   const d = diffs?.[section] || { added: {}, removed: {}, changed: {} };
 
@@ -408,15 +537,19 @@ function generatePopupContent(section, id) {
   const isChanged = d.changed && Object.prototype.hasOwnProperty.call(d.changed, id);
 
   let changeType = 'Unchanged';
-  if (isAdded) changeType = 'Added';
+
+  // If we know the expected state (e.g. from the clicked layer), prioritize it
+  if (expectedState === 'removed' && isRemoved) changeType = 'Removed';
+  else if (expectedState === 'added' && isAdded) changeType = 'Added';
+  else if (isAdded) changeType = 'Added';
   else if (isRemoved) changeType = 'Removed';
   else if (isChanged) changeType = 'Changed';
 
   const renameTo = renames?.[section]?.[id];
-  let html = `<div style="font-weight:bold;font-size:14px;border-bottom:1px solid #eee;padding-bottom:4px;margin-bottom:6px;">${escapeHtml(section)}: ${escapeHtml(id)}</div>`;
-  html += `<div style="margin-bottom:6px;"><span class="pill ${changeType.toLowerCase()}">${changeType}</span>`;
+  let html = `<div style="font-weight:700;font-size:14px;border-bottom:1px solid #e5e7eb;padding-bottom:6px;margin-bottom:8px;">${escapeHtml(section)}: ${escapeHtml(id)}</div>`;
+  html += `<div style="margin-bottom:8px;"><span class="badge ${changeType.toLowerCase()}">${changeType}</span>`;
   if (renameTo) {
-    html += `<span style="margin-left:4px;font-size:12px;color:#555;">(Renamed to ${escapeHtml(renameTo)})</span>`;
+    html += `<span style="margin-left:6px;font-size:12px;color:#6b7280;">(Renamed to ${escapeHtml(renameTo)})</span>`;
   }
   html += `</div>`;
 
@@ -429,7 +562,7 @@ function generatePopupContent(section, id) {
     const newArr = Array.isArray(changedObj) ? changedObj[1] : (changedObj?.values?.[1] || []);
 
     const maxLen = Math.max(oldArr.length, newArr.length);
-    let changesHtml = '<ul style="margin:0;padding-left:18px;font-size:12px;">';
+    let changesHtml = '<ul style="margin:0;padding-left:14px;font-size:12px;">';
     let changeCount = 0;
     for (let i = 0; i < maxLen; i++) {
       const ov = oldArr[i] ?? "";
@@ -443,7 +576,7 @@ function generatePopupContent(section, id) {
     if (changeCount > 0) {
       html += changesHtml + '</ul>';
     } else {
-      html += '<div style="font-size:12px;color:#666;">No parameter changes found.</div>';
+      html += '<div style="font-size:12px;color:#6b7280;">No parameter changes found.</div>';
     }
   }
 
@@ -466,16 +599,18 @@ function showMapPopup(clickLatlng, elements, isNewClick = true) {
   }
 
   const selected = elements[lastClickIndex];
-  const { id, section } = selected;
+  const { id, section, isRemoved } = selected;
 
   // Calculate Centroid
   let targetLatLng = lastClickLatLng;
   const t = secType(section);
 
   if (t && state.LAST.json) {
-    const g1 = state.LAST.json.geometry[t === 'nodes' ? 'nodes1' : t === 'links' ? 'links1' : 'subs1'];
-    const g2 = state.LAST.json.geometry[t === 'nodes' ? 'nodes2' : t === 'links' ? 'links2' : 'subs2'];
-    const geo = (g2 && g2[id] !== undefined) ? g2[id] : (g1 ? g1[id] : undefined);
+    const KEY = isRemoved ? 1 : 2; // geometry source key
+    const g = state.LAST.json.geometry[t === 'nodes' ? `nodes${KEY}` : t === 'links' ? `links${KEY}` : `subs${KEY}`];
+
+    // Fallback if not found in specific geometry (e.g. unchanged)
+    const geo = (g && g[id] !== undefined) ? g[id] : undefined;
 
     if (geo) {
       if (t === 'nodes') {
@@ -490,7 +625,10 @@ function showMapPopup(clickLatlng, elements, isNewClick = true) {
     }
   }
 
-  const content = generatePopupContent(section, id);
+  // Derive Expected State
+  const expectedState = isRemoved ? 'removed' : 'added';
+
+  const content = generatePopupContent(section, id, expectedState);
   const cycleText = elements.length > 1 ? `<div style="display:flex;justify-content:space-between;align-items:center;font-size:11px;color:#777;margin-top:8px;padding-top:4px;border-top:1px solid #f0f0f0;">
     <button onclick="cycleMapPopup(-1)" style="padding:2px 6px;font-size:14px;">‹</button>
     <span>${lastClickIndex + 1} of ${elements.length}</span>
@@ -502,7 +640,7 @@ function showMapPopup(clickLatlng, elements, isNewClick = true) {
     .setContent(content + cycleText)
     .openOn(map);
 
-  highlightElement(section, id);
+  highlightElement(section, id, false, isRemoved);
 }
 
 // Updated: Pixel-based selection with Conduit Trimming and Explicit Priority
@@ -573,6 +711,12 @@ function hasHoverElement(latlng) {
 
 map.on('click', (e) => {
   const clickedElements = findNearbyElements(e.latlng);
+
+  if (state.UI_MODE === 'RPT' && clickedElements.length > 0) {
+    showMapPopupRPT(e.latlng, clickedElements, true);
+    return;
+  }
+
   if (clickedElements.length > 0) {
     showMapPopup(e.latlng, clickedElements, true);
   } else {
@@ -583,15 +727,153 @@ map.on('click', (e) => {
   }
 });
 
+
+// --- RPT POPUP LOGIC ---
+
+let lastClickedElementsRPT = [];
+let lastClickIndexRPT = 0;
+let lastClickLatLngRPT = null;
+
+window.cycleMapPopupRPT = function (direction) {
+  lastClickIndexRPT = (lastClickIndexRPT + direction + lastClickedElementsRPT.length) % lastClickedElementsRPT.length;
+  map.closePopup();
+  showMapPopupRPT(lastClickLatLngRPT, lastClickedElementsRPT, false);
+};
+
+function getPopupContentRPT(info) {
+  const { id, type } = info;
+  if (!state.LAST.resultJson) return null;
+
+  // Determine target section based on current map selection or default
+  let targetSection = document.getElementById('mapModeSelect') ? document.getElementById('mapModeSelect').value : 'Composite';
+
+  // If composite or generic, map type to specific summary
+  if (targetSection === 'Composite' || targetSection === 'Default' || !targetSection) {
+    if (type === 'node') targetSection = "Node Depth Summary";
+    else if (type === 'link') targetSection = "Link Flow Summary";
+    else return null;
+  }
+
+  const secData = state.LAST.resultJson.sections.find(s => s.section === targetSection);
+  // Be robust: if element not found in target section, try to find ANY section it might be in?
+  // For now, strict mapping.
+
+  let html = `<div style="font-weight:700;font-size:14px;border-bottom:1px solid #e5e7eb;padding-bottom:6px;margin-bottom:8px;">${escapeHtml(id)} <span style="font-weight:400; font-size:11px; color:var(--text-secondary)">(${type})</span></div>`;
+
+  if (!secData) {
+    html += `<div style="color:var(--text-tertiary); font-style:italic;">No data in ${targetSection}</div>`;
+    return html;
+  }
+
+  const row = secData.rows.find(r => r[secData.id_col] === id);
+  if (!row) {
+    html += `<div style="color:var(--text-tertiary); font-style:italic;">Not found in ${targetSection}</div>`;
+    return html;
+  }
+
+  // Render Table
+  html += `<table style="width:100%; font-size:11px; border-collapse:collapse;">`;
+  // Header
+  // We want to show specific columns cleanly. 
+  // Usually: Metric 1, Metric 2, Diff, %Diff
+  // Let's just list all output columns
+
+  const cols = secData.out_columns.filter(c => c !== secData.id_col);
+
+  // Style helper
+  const rowStyle = "border-bottom:1px solid #f3f4f6;";
+  const cellStyle = "padding:3px 0;";
+
+  cols.forEach(col => {
+    let val = row[col];
+    let color = "inherit";
+
+    // Colorize % diff or diff columns?
+    if (col.includes('%') || col.includes('Diff')) {
+      // Check bucket
+      const num = parseFloat(val);
+      if (!isNaN(num)) {
+        const isPct = col.includes('%');
+        const bucketColor = getBucketColor(num, isPct);
+        if (bucketColor !== C.unchanged) color = bucketColor; // Use vivid colors
+      }
+    }
+
+    html += `<tr style="${rowStyle}">
+            <td style="${cellStyle} color:var(--text-secondary); width:50%;">${escapeHtml(col)}</td>
+            <td style="${cellStyle} text-align:right; font-family:monospace; font-weight:600; color:${color}">${escapeHtml(val)}</td>
+        </tr>`;
+  });
+
+  html += `</table>`;
+  return html;
+}
+
+function showMapPopupRPT(clickLatlng, elements, isNewClick = true) {
+  if (!elements || elements.length === 0) return;
+
+  if (isNewClick) {
+    const isSameSet = JSON.stringify(elements) === JSON.stringify(lastClickedElementsRPT);
+    if (isSameSet) {
+      lastClickIndexRPT = (lastClickIndexRPT + 1) % elements.length;
+    } else {
+      lastClickIndexRPT = 0;
+      lastClickedElementsRPT = elements;
+    }
+    lastClickLatLngRPT = clickLatlng;
+  }
+
+  const selected = elements[lastClickIndexRPT];
+
+  // Highlight first
+  // Note: highlightElement expects generic section names (JUNCTIONS/CONDUITS), 
+  // but results mode map elements have specific types 'node', 'link'.
+  // We need to map them back for highlightElement to work on the geometry logic (which uses generic names).
+  // Actually, `highlightElement` uses `secType` logic. 
+  // We should pass generic names if possible.
+  let genericSection = 'JUNCTIONS'; // default
+  if (selected.type === 'link') genericSection = 'CONDUITS';
+  else if (selected.type === 'sub') genericSection = 'SUBCATCHMENTS';
+
+  highlightElement(genericSection, selected.id, false, false, true); // Skip scroll because we dispatch event below
+
+  // Dispatch Event for Table Scroll
+  const event = new CustomEvent('results-map-selection', { detail: { id: selected.id } });
+  window.dispatchEvent(event);
+
+  // Popup Content
+  const content = getPopupContentRPT(selected);
+  const cycleText = elements.length > 1 ? `<div style="display:flex;justify-content:space-between;align-items:center;font-size:11px;color:#777;margin-top:8px;padding-top:4px;border-top:1px solid #f0f0f0;">
+    <button onclick="cycleMapPopupRPT(-1)" style="padding:2px 6px;font-size:14px;">‹</button>
+    <span>${lastClickIndexRPT + 1} of ${elements.length}</span>
+    <button onclick="cycleMapPopupRPT(1)" style="padding:2px 6px;font-size:14px;">›</button>
+  </div>` : "";
+
+  // Position Popup
+  // Logic to find best position similar to original showMapPopup
+  // (copying position logic for brevity or reusing?)
+  // Let's use clickLatlng for simplicity or improve if needed.
+  // Re-using the centroid logic from showMapPopup would be better but it's local.
+  // I'll assume clickLatlng is good enough for now.
+
+  L.popup({ minWidth: 200, maxWidth: 350 })
+    .setLatLng(clickLatlng)
+    .setContent(content + cycleText)
+    .openOn(map);
+}
+
 // Cursor Hover Effect
 map.on('mousemove', throttle((e) => {
   const hit = hasHoverElement(e.latlng);
   document.getElementById('map').style.cursor = hit ? 'pointer' : '';
-}, 40)); // Throttle to 40ms (~25fps) for performance
+}, 40));
 
+// CRS Selection
 document.getElementById('crsSelect').addEventListener('change', (e) => {
   state.CURRENT_CRS = e.target.value;
-  proj4.defs(state.CURRENT_CRS, state.PROJECTIONS[state.CURRENT_CRS]);
+  if (window.proj4) {
+    proj4.defs(state.CURRENT_CRS, state.PROJECTIONS[state.CURRENT_CRS]);
+  }
   state.XY_LATLNG_CACHE.clear();
   if (state.LAST.json) {
     drawGeometry(state.LAST.json);
@@ -599,288 +881,382 @@ document.getElementById('crsSelect').addEventListener('change', (e) => {
 });
 
 
-// Add Leaflet Layers Control
-// This replaces the manual checkboxes for Nodes/Links/Subs and Basemap dropdown
+// --- MAP VIEW FILTER SETTINGS ---
+
+const FILTER_MODES = {
+  "Default": { label: "Default View", color: null },
+  "Changed": { label: "Focus: Changed", color: C.changed },
+  "Added": { label: "Focus: Added", color: C.added },
+  "Removed": { label: "Focus: Removed", color: C.removed }
+};
+
+let currentFilterMode = "Default";
+
+export function setMapFilter(mode) {
+  const settings = FILTER_MODES[mode];
+  if (!settings) return;
+  if (!settings) return;
+  currentFilterMode = mode;
+
+  // Re-draw labels immediately to reflect filter
+  throttledDrawLabels();
+
+  // 1. Update Layer Styles
+  const targetColor = settings.color;
+
+  const categories = ['unchanged', 'changed', 'added', 'removed'];
+
+  categories.forEach(cat => {
+    const isTarget = (mode === 'Default') || (cat.toLowerCase() === mode.toLowerCase());
+    let colorToUse;
+
+    // Determine color and opacity base
+    if (mode === 'Default') {
+      colorToUse = C[cat];
+    } else {
+      if (isTarget) {
+        colorToUse = targetColor;
+      } else {
+        colorToUse = C.unchanged; // Grey out non-targets
+      }
+    }
+
+    // Apply to nodes
+    layers.nodes[cat].eachLayer(layer => {
+      layer.setStyle({
+        fillColor: colorToUse,
+        color: "#000",
+        opacity: isTarget ? 1.0 : 0.5,
+        fillOpacity: isTarget ? 1.0 : 0.5
+      });
+      if (isTarget && mode !== 'Default') layer.bringToFront();
+    });
+
+    // Apply to links
+    layers.links[cat].eachLayer(layer => {
+      layer.setStyle({
+        color: colorToUse,
+        opacity: 0.95,
+        weight: isTarget ? 3 : 2
+      });
+      if (isTarget && mode !== 'Default') layer.bringToFront();
+    });
+
+    // Apply to subs
+    layers.subs[cat].eachLayer(layer => {
+      layer.setStyle({
+        color: colorToUse,
+        fillColor: colorToUse,
+        fillOpacity: 0.25,
+        opacity: 1.0,
+        weight: 2
+      });
+      if (isTarget && mode !== 'Default') layer.bringToFront();
+    });
+  });
+
+  updateLegend(mode);
+}
+
+
+
+// =============================================================================
+// NEW: RESULTS MAP STYLE UPDATE (Supports Thresholds & Composite View)
+// =============================================================================
+
+export function getBucketColor(val, isPct) {
+  const absVal = Math.abs(val);
+  if (isPct) {
+    // Percentage Buckets
+    if (absVal <= 5) return C.unchanged; // Neutral/Grey
+    if (absVal <= 15) return '#3b82f6';  // Blue (Minor)
+    if (absVal <= 25) return '#eab308';  // Yellow (Moderate)
+    if (absVal <= 50) return '#f97316';  // Orange (Significant)
+    return '#ef4444';                    // Red (Critical)
+  } else {
+    // Absolute Buckets (e.g. Depth in feet)
+    if (absVal <= 0.02) return C.unchanged;
+    if (absVal <= 0.1) return '#22c55e';  // Green
+    if (absVal <= 0.5) return '#eab308';  // Yellow
+    if (absVal <= 1.0) return '#f97316';  // Orange
+    return '#ef4444';                     // Red
+  }
+}
+
+export function updateMapStyle(mode, params) {
+  if (mode === 'INP') {
+    // Reset to INP view (structural difference)
+    setMapFilter('Default');
+    return;
+  }
+
+  if (mode === 'RPT' && params) {
+    const { section } = params;
+
+    const resultJson = state.LAST.resultJson;
+    if (!resultJson) return;
+
+    // Helper to get value map for a section
+    const getValueMap = (secName) => {
+      const secData = resultJson.sections.find(s => s.section === secName);
+      if (!secData) return { map: {}, isPct: false, metric: '' };
+
+      const idCol = secData.id_col;
+      const cols = secData.out_columns;
+      const metricCol = cols[cols.length - 1];
+      const isPct = metricCol.includes('%') || metricCol.includes('Pct') || metricCol.includes('Percent');
+
+      const map = {};
+      secData.rows.forEach(r => {
+        const valStr = r[metricCol];
+        const val = parseFloat(valStr);
+        map[r[idCol]] = isNaN(val) ? 0 : val;
+      });
+      return { map, isPct, metric: metricCol };
+    };
+
+    let nodeMap = {};
+    let linkMap = {};
+    let subMap = {};
+    let nodeIsPct = false, linkIsPct = false;
+    let title = "";
+
+    if (section === 'Composite') {
+      const nodeRes = getValueMap("Node Depth Summary");
+      const linkRes = getValueMap("Link Flow Summary");
+
+      nodeMap = nodeRes.map;
+      nodeIsPct = nodeRes.isPct;
+      linkMap = linkRes.map;
+      linkIsPct = linkRes.isPct;
+      title = "Composite: Depth & Flow";
+    } else {
+      const res = getValueMap(section);
+      nodeMap = res.map;
+      linkMap = res.map;
+      subMap = res.map;
+      nodeIsPct = res.isPct;
+      linkIsPct = res.isPct;
+      title = res.metric;
+    }
+
+    const groups = [layers.nodes, layers.links, layers.subs];
+    const cats = ['unchanged', 'changed', 'added', 'removed'];
+
+    groups.forEach(group => {
+      cats.forEach(cat => {
+        group[cat].eachLayer(layer => {
+          const id = layer.swmmInfo?.id;
+          const type = layer.swmmInfo?.type;
+          if (!id) return;
+
+          let val = undefined;
+          let isPct = false;
+
+          if (type === 'node') {
+            if (Object.prototype.hasOwnProperty.call(nodeMap, id)) {
+              val = nodeMap[id];
+              isPct = nodeIsPct;
+            }
+          } else if (type === 'link') {
+            if (Object.prototype.hasOwnProperty.call(linkMap, id)) {
+              val = linkMap[id];
+              isPct = linkIsPct;
+            }
+          } else if (type === 'sub') {
+            if (Object.prototype.hasOwnProperty.call(subMap, id)) {
+              val = subMap[id];
+              isPct = linkIsPct;
+            }
+          }
+
+          if (val !== undefined) {
+            const color = getBucketColor(val, isPct);
+            const isGrey = (color === C.unchanged);
+
+            // Apply Style
+            if (type === 'node') {
+              layer.setStyle({
+                radius: layer.options.radius,
+                color: "#000",
+                weight: 1,
+                fillColor: color,
+                fillOpacity: 1.0,
+                opacity: 1
+              });
+            } else if (type === 'link') {
+              layer.setStyle({
+                color: color,
+                weight: 3,              // Match default weight 3
+                opacity: 1.0
+              });
+            } else {
+              layer.setStyle({
+                color: color,
+                fillColor: color,
+                fillOpacity: isGrey ? 0.3 : 0.4,
+                weight: 2
+              });
+            }
+
+            if (!isGrey) layer.bringToFront();
+
+          } else {
+            // Not in result set -> Grey out (Context) but visible like Unchanged
+            if (type === 'node') {
+              layer.setStyle({
+                color: "#000",
+                weight: 1,
+                fillColor: C.unchanged, // Match unchanged
+                fillOpacity: 1.0,
+                opacity: 1
+              });
+            } else if (type === 'link') {
+              layer.setStyle({
+                color: C.unchanged,   // Match unchanged
+                weight: 3,            // Match default weight
+                opacity: 1.0
+              });
+            } else {
+              layer.setStyle({
+                color: C.unchanged,
+                fillColor: C.unchanged,
+                fillOpacity: 0.3,
+                weight: 1
+              });
+            }
+          }
+        });
+      });
+    });
+
+    updateLegendResults(title, section === 'Composite');
+  }
+}
+
+function updateLegendResults(metric, isComposite) {
+  const legendDiv = document.getElementById('map-legend');
+  if (!legendDiv) return;
+
+  let html = `<div style="font-weight:700; margin-bottom:6px; font-size:12px; border-bottom:1px solid var(--border-medium); padding-bottom:4px;">${escapeHtml(metric)}</div>`;
+
+  const item = (color, label) => `<div style="display:flex; align-items:center; gap:4px; margin-right:10px; margin-bottom:4px; font-size:11px;">
+      <span class="dot" style="background:${color}; width:8px; height:8px;"></span> ${label}
+  </div>`;
+
+  html += `<div style="display:flex; flex-wrap:wrap;">`;
+
+  if (isComposite) {
+    html += `<div style="font-size:10px; font-weight:600; margin-bottom:4px; color:var(--text-secondary); width:100%;">Depth Diff | Flow % Diff</div>`;
+    html += item(C.unchanged, '0 - 0.02  |  0 - 5%');
+    html += item('#3b82f6', '0.02 - 0.1  |  5 - 15%');
+    html += item('#eab308', '0.1 - 0.5  |  15 - 25%');
+    html += item('#f97316', '0.5 - 1.0  |  25 - 50%');
+    html += item('#ef4444', '> 1.0  |  > 50%');
+  } else {
+    const isPct = metric.includes('%') || metric.includes('Percent');
+
+    if (isPct) {
+      html += item(C.unchanged, '0 - 5%');
+      html += item('#3b82f6', '5 - 15%');
+      html += item('#eab308', '15 - 25%');
+      html += item('#f97316', '25 - 50%');
+      html += item('#ef4444', '> 50%');
+    } else {
+      html += item(C.unchanged, '0 - 0.02');
+      html += item('#22c55e', '0.02 - 0.1');
+      html += item('#eab308', '0.1 - 0.5');
+      html += item('#f97316', '0.5 - 1.0');
+      html += item('#ef4444', '> 1.0');
+    }
+  }
+
+  // Add Context Key
+  html += `<div style="margin-top:4px; margin-right:10px; font-size:11px;">`;
+  html += item(C.unchanged, 'No Data / Context');
+  html += `</div>`;
+
+  html += `</div>`; // Close flex
+
+  legendDiv.innerHTML = html;
+}
+
+function updateLegend(mode) {
+  const legendDiv = document.getElementById('map-legend');
+  if (!legendDiv) return;
+
+  const buildItem = (colorVar, label) => {
+    return `<div style="display:flex; align-items:center; gap:4px; margin-right:10px; margin-bottom:4px; font-size:11px;">
+        <span class="dot" style="background:${colorVar}; width:8px; height:8px;"></span> ${label}
+    </div>`;
+  };
+
+  let html = `<div style="font-weight:700; margin-bottom:6px; font-size:12px;">Legend</div>`;
+  html += `<div style="display:flex; flex-wrap:wrap;">`;
+
+  if (mode === 'Default') {
+    html += buildItem('var(--text-tertiary)', 'Unchanged');
+    html += buildItem('var(--changed)', 'Changed');
+    html += buildItem('var(--added)', 'Added');
+    html += buildItem('var(--removed)', 'Removed');
+  } else {
+    // Focus Mode
+    const focusColor = (mode === 'Changed') ? 'var(--changed)' : (mode === 'Added' ? 'var(--added)' : 'var(--removed)');
+    html += buildItem(focusColor, mode);
+    html += buildItem('var(--text-tertiary)', 'Others');
+  }
+
+  html += `<div style="display:flex; align-items:center; gap:4px; margin-right:10px; margin-bottom:4px; font-size:11px;"><span class="dot" style="background:#0ff; border:1px solid cyan; width:8px; height:8px;"></span> Selected</div>`;
+  html += `</div>`; // Close flex wrap
+
+  // Add Node Types Key - compact horizontally
+  html += `<div style="margin-top:4px; border-top:1px solid var(--border-medium); padding-top:4px;">`;
+  html += `<div style="font-size:10px; font-weight:600; margin-bottom:2px; color:var(--text-secondary);">NODE TYPES</div>`;
+  html += `<div style="display:flex; flex-wrap:wrap; gap:8px;">`;
+
+  // Junction (Circle)
+  html += `<div style="display:flex; align-items:center; gap:4px; font-size:10px;"><span style="display:inline-block; width:6px; height:6px; background:var(--text-tertiary); border-radius:50%"></span> Junction</div>`;
+  // Storage (Square)
+  html += `<div style="display:flex; align-items:center; gap:4px; font-size:10px;"><span style="display:inline-block; width:6px; height:6px; background:var(--text-tertiary);"></span> Storage</div>`;
+  // Outfall (Triangle Up)
+  html += `<div style="display:flex; align-items:center; gap:4px; font-size:10px;"><div style="width:0; height:0; border-left:3px solid transparent; border-right:3px solid transparent; border-bottom:6px solid var(--text-tertiary);"></div> Outfall</div>`;
+  // Divider (Diamond)
+  html += `<div style="display:flex; align-items:center; gap:4px; font-size:10px;"><span style="display:inline-block; width:5px; height:5px; background:var(--text-tertiary); transform:rotate(45deg);"></span> Divider</div>`;
+
+  html += `</div></div>`;
+
+  legendDiv.innerHTML = html;
+}
+
+// --- LAYERS CONTROL & INTEGRATION ---
+
 const overlays = {
   "Nodes": overlayGroups.nodes,
   "Links": overlayGroups.links,
   "Subcatchments": overlayGroups.subs
-  // Labels could also go here if we wanted: "Labels": labelsLayer
 };
 
-L.control.layers(baseLayers, overlays, { position: 'topright' }).addTo(map);
+// Create the standard layers control
+const layersControl = L.control.layers(baseLayers, overlays, { position: 'topright' }).addTo(map);
 
-// Labels Toggle (kept separate as requested, or could move to control)
+// New Map Mode Selection Logic
+const mapModeSelect = document.getElementById('mapModeSelect');
+if (mapModeSelect) {
+  mapModeSelect.addEventListener('change', (e) => {
+    // Check global state UI mode
+    // We need to import state? It's already imported.
+    if (state.UI_MODE === 'RPT') {
+      // Assuming result section selection
+      if (e.target.value === "") return; // None
+      updateMapStyle('RPT', { section: e.target.value });
+    } else {
+      setMapFilter(e.target.value);
+    }
+  });
+}
+
+// Labels Toggle
 document.getElementById('labelsToggle').addEventListener('change', () => {
   if (!state.LAST.json) return;
   throttledDrawLabels();
 });
-
-
-// ==============================================================================
-// RESULT VISUALIZATION (RPT)
-// ==============================================================================
-
-const RESULT_CONFIG = {
-  "Link Flow Summary": {
-    metric: "% Diff Max Flow",
-    type: "percent",
-    buckets: [
-      { max: 2, color: "#2ecc71", weight: 4, label: "± 2%" },
-      { max: 5, color: "#f1c40f", weight: 6, label: "± 2-5%" },
-      { max: 15, color: "#e67e22", weight: 8, label: "± 5-15%" },
-      { max: Infinity, color: "#e74c3c", weight: 10, label: "> 15%" }
-    ]
-  },
-  "Node Depth Summary": {
-    metric: "Diff Max Depth",
-    type: "absolute",
-    unit: "ft",
-    // ... (rest of config unchanged, just needed to start the block to replace weights)
-    // Actually I need to match valid chunks. I will do multiple chunks or a larger block if needed.
-    // Simplest is to just update the specific link section and the draw functions code.
-    // I'll split into chunks.
-
-    buckets: [
-      { max: 0.5, color: "#2ecc71", radius: 4, label: "± 0.5'" },
-      { max: 1.0, color: "#f1c40f", radius: 6, label: "± 0.5-1'" },
-      { max: 3.0, color: "#e67e22", radius: 8, label: "± 1-3'" },
-      { max: Infinity, color: "#e74c3c", radius: 10, label: "> 3'" }
-    ]
-  },
-  "Node Flooding Summary": {
-    metric: "Diff Hours Flooded",
-    type: "threshold",
-    threshold: 0.01,
-    buckets: [
-      { max: 0.01, color: "#f1c40f", radius: 6, label: "Minor Increase (< 0.01h)" },
-      { max: Infinity, color: "#e74c3c", radius: 9, label: "Increase (> 0.01h)" }
-    ]
-  },
-  "Node Inflow Summary": {
-    metric: "% Diff Total Inflow",
-    type: "percent",
-    buckets: [
-      { max: 2, color: "#2ecc71", radius: 4, label: "± 2%" },
-      { max: 5, color: "#f1c40f", radius: 6, label: "± 2-5%" },
-      { max: 15, color: "#e67e22", radius: 8, label: "± 5-15%" },
-      { max: Infinity, color: "#e74c3c", radius: 10, label: "> 15%" }
-    ]
-  },
-  "Node Surcharge Summary": {
-    metric: "Diff Hours Surcharged",
-    type: "threshold",
-    threshold: 0.01,
-    buckets: [
-      { max: 0.01, color: "#f1c40f", radius: 6, label: "Minor Increase (< 0.01h)" },
-      { max: Infinity, color: "#e74c3c", radius: 9, label: "Increase (> 0.01h)" }
-    ]
-  },
-  "Outfall Loading Summary": {
-    metric: "% Diff Total Volume",
-    type: "percent",
-    buckets: [
-      { max: 2, color: "#2ecc71", radius: 4, label: "± 2%" },
-      { max: 5, color: "#f1c40f", radius: 6, label: "± 2-5%" },
-      { max: 15, color: "#e67e22", radius: 8, label: "± 5-15%" },
-      { max: Infinity, color: "#e74c3c", radius: 10, label: "> 15%" }
-    ]
-  },
-  "Subcatchment Runoff Summary": {
-    metric: "% Diff Total Runoff", // Using volume
-    type: "percent",
-    buckets: [
-      { max: 2, color: "#2ecc71", weight: 1, label: "± 2%" },
-      { max: 5, color: "#f1c40f", weight: 2, label: "± 2-5%" },
-      { max: 15, color: "#e67e22", weight: 3, label: "± 5-15%" },
-      { max: Infinity, color: "#e74c3c", weight: 4, label: "> 15%" }
-    ]
-  }
-};
-
-
-export function setMapMode(mode) {
-  if (mode === 'INP') {
-    if (state.LAST.json) drawGeometry(state.LAST.json);
-    document.getElementById('legend-results').style.display = 'none';
-    document.getElementById('legend-diffs').style.display = 'block';
-  } else {
-    document.getElementById('legend-results').style.display = 'block';
-    document.getElementById('legend-diffs').style.display = 'none';
-  }
-}
-
-export function updateMapMetricOptions(section) {
-  if (state.UI_MODE !== 'RESULTS') return;
-  drawResults(section);
-}
-
-function updateResultLegend(config) {
-  const cont = document.getElementById('legend-results');
-  if (!cont) return;
-
-  // Clear generic items
-  cont.innerHTML = `<div class="legend-title">Results: ${state.LAST.currentSection}</div>`;
-
-  if (!config) {
-    cont.innerHTML += `<div class="lg-item" style="color:#888;font-style:italic">No visualization rules.</div>`;
-    return;
-  }
-
-  config.buckets.forEach(b => {
-    cont.innerHTML += `<div class="lg-item"><span class="lg-swatch" style="background:${b.color}"></span> ${b.label}</div>`;
-  });
-
-  cont.innerHTML += `<div class="lg-item"><span class="lg-swatch" style="background:#bdc3c7"></span> No Change / Not in Report</div>`;
-}
-
-function drawResults(section) {
-  const tableConfig = RESULT_CONFIG[section];
-
-  // Update Legend
-  updateResultLegend(tableConfig);
-
-  const resJson = state.LAST.resultJson;
-  const inpJson = state.LAST.json;
-  if (!resJson || !inpJson) return;
-
-  resetLayers();
-
-  // Draw BASE GEOMETRY (Gray) for everything
-  drawBaseGeometry(inpJson.geometry, section);
-
-  // If no config or data, we stop here (just showing base map)
-  const secData = resJson.sections.find(s => s.section === section);
-  if (!secData || !tableConfig) return;
-
-  const g = inpJson.geometry;
-
-  secData.rows.forEach(r => {
-    const id = r[secData.id_col];
-
-    // IGNORE one-sided results (visualize as base-grey)
-    if (r.Status === 'ONLY_IN_A' || r.Status === 'ONLY_IN_B') return;
-
-    // Parse value difference from COMPUTED column
-    // The metric name in config now MATCHES the column name in table (e.g. "% Diff ...")
-    let metricVal = r[tableConfig.metric];
-    if (metricVal === undefined) return;
-
-    let diff = parseFloat(metricVal);
-    if (isNaN(diff)) return;
-
-    // Determine Bucket
-    let bucket = null;
-    let absDiff = Math.abs(diff);
-
-    // Filter small noise
-    if (absDiff <= 1e-6) return; // No change
-
-    if (tableConfig.type === 'threshold') {
-      if (absDiff <= tableConfig.threshold) bucket = tableConfig.buckets[0];
-      else bucket = tableConfig.buckets[1];
-    } else {
-      // Percent or Absolute: check against max
-      bucket = tableConfig.buckets.find(b => absDiff < b.max);
-    }
-
-    if (!bucket) return;
-
-    // Draw Overlay
-    const t = secType(section);
-    const color = bucket.color;
-
-    // Pass 'r' (the whole row) to popup so it can extract other info if needed?
-    // The popup function signature needs to change to accept 'r'. 
-    const popupContent = getPopupContentForResult(r, id, section, diff, tableConfig);
-
-    let layer = null;
-    if (t === 'nodes') {
-      const xy = g.nodes2?.[id] || g.nodes1?.[id];
-      if (xy) {
-        const r = bucket.radius || 5;
-        layer = L.circleMarker(xyToLatLng(xy[0], xy[1]), {
-          radius: r, color: "#000", weight: 1, fillColor: color, fillOpacity: 1, pane: 'nodePane'
-        }).addTo(layers.nodes.changed);
-      }
-    } else if (t === 'links') {
-      const latlngs = g.links2?.[id] || g.links1?.[id];
-      if (latlngs) {
-        const w = bucket.weight || 3;
-        const ll = coordsToLatLng(latlngs);
-        layer = L.polyline(ll, { color: color, weight: w, opacity: 1, pane: 'linkPane' })
-          .addTo(layers.links.changed);
-      }
-    } else if (t === 'subs') {
-      const poly = g.subs2?.[id] || g.subs1?.[id];
-      if (poly) {
-        const w = bucket.weight || 2;
-        layer = L.polygon(coordsToLatLng(poly), { color: color, weight: w, fill: false, pane: 'subcatchmentPane' })
-          .addTo(layers.subs.changed);
-      }
-    }
-
-    if (layer) {
-      layer.swmmInfo = { id, section, type: t };
-      layer.bindPopup(popupContent);
-    }
-  });
-
-  throttledDrawLabels();
-}
-
-function drawBaseGeometry(g, section) {
-  const nodeIds = new Set([...Object.keys(g.nodes1 || {}), ...Object.keys(g.nodes2 || {})]);
-  const linkIds = new Set([...Object.keys(g.links1 || {}), ...Object.keys(g.links2 || {})]);
-  const subIds = new Set([...Object.keys(g.subs1 || {}), ...Object.keys(g.subs2 || {})]);
-
-  const gray = "#bdc3c7";
-
-  nodeIds.forEach(id => {
-    const xy = g.nodes2[id] || g.nodes1[id];
-    if (xy) {
-      L.circleMarker(xyToLatLng(xy[0], xy[1]), {
-        radius: 3, color: "#000", weight: 0.5, fillColor: gray, fillOpacity: 1, pane: 'nodePane'
-      }).addTo(layers.nodes.unchanged); // Using unchanged group as base container
-    }
-  });
-
-  linkIds.forEach(id => {
-    const pts = g.links2[id] || g.links1[id];
-    if (pts) {
-      L.polyline(coordsToLatLng(pts), { color: gray, weight: 3, opacity: 1, pane: 'linkPane' })
-        .addTo(layers.links.unchanged);
-    }
-  });
-
-  subIds.forEach(id => {
-    const pts = g.subs2[id] || g.subs1[id];
-    if (pts) {
-      L.polygon(coordsToLatLng(pts), { color: gray, weight: 1, fill: false, pane: 'subcatchmentPane' })
-        .addTo(layers.subs.unchanged);
-    }
-  });
-}
-
-function getPopupContentForResult(row, id, section, diff, config) {
-  const units = config.unit || "";
-  // Config metric name is now the COMPUTED column name
-
-  let diffDisplay = "";
-  if (config.type === 'percent') diffDisplay = `${diff.toFixed(2)}%`;
-  else diffDisplay = `${diff.toFixed(3)} ${units}`;
-
-  return `
-      <div style="font-weight:bold">${id}</div>
-      <div style="font-size:11px;color:#666">${section}</div>
-      <hr style="margin:4px 0;border:0;border-top:1px solid #ddd"/>
-      <div style="font-size:11px;font-weight:bold">${config.metric}</div>
-      <div style="margin-top:4px;font-weight:bold;color:${diff > 0 ? '#e74c3c' : (diff < 0 ? '#2ecc71' : '#f39c12')}">
-        Value: ${diffDisplay}
-      </div>
-    `;
-}
-
-
-
-

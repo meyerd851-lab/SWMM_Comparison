@@ -13,6 +13,7 @@ import { renderSections } from './table.js';
 import { drawGeometry } from './map.js';
 import { makeResizable, openHelpModal, closeHelpModal, saveSession, loadSession, exportToExcel, exportToShapefile, openDetail, closeModal, copyRowJSON, updateFileName, openCompareModal, closeCompareModal, setWorker, setSetStatusCallback, initTheme, toggleTheme } from './ui.js';
 import { setOpenDetailCallback } from './table.js';
+import { initResultsUI, loadResultsData } from './results.js';
 
 // ==============================================================================
 // SECTION 1: INITIALIZATION
@@ -58,22 +59,27 @@ worker.onmessage = (ev) => {
     try {
       const allJson = JSON.parse(payload);
 
-      // If it's the old format (just INP diffs), wrap it
+      // Handle combined result format
+      if (allJson.inp) {
+        state.LAST.json = allJson.inp;
+      }
+      if (allJson.rpt) {
+        state.LAST.resultJson = allJson.rpt;
+        loadResultsData(allJson.rpt);
+      }
+
+      // Fallback for old format or just INP
       if (!allJson.inp && !allJson.rpt && allJson.diffs) {
         state.LAST.json = allJson;
         state.LAST.resultJson = null;
-      } else {
-        state.LAST.json = allJson.inp;
-        state.LAST.resultJson = allJson.rpt;
       }
 
-      // Default to INP content unless we are in RESULTS mode? 
-      // Actually we stay in whatever mode we are in, or force switch to existing one.
-      // For now, let's refresh the view.
+      import('./results.js').then(mod => mod.switchTab(state.UI_MODE || 'INP'));
 
-      import('./ui.js').then(mod => mod.switchTab(state.UI_MODE || 'INP'));
+      if (state.LAST.json) {
+        drawGeometry(state.LAST.json); // Geometry always comes from INP
+      }
 
-      drawGeometry(state.LAST.json); // Geometry always comes from INP
       setStatus("Done.");
     } catch (e) {
       console.error(e);
@@ -113,6 +119,10 @@ worker.postMessage({ type: "init" });
 // Set up openDetail callback for table.js
 setOpenDetailCallback(openDetail);
 
+// Initialize Results UI
+initResultsUI();
+
+// File input handlers
 // File input handlers
 updateFileName('f1', 'f1-name');
 updateFileName('f2', 'f2-name');
@@ -126,15 +136,13 @@ document.getElementById('go').addEventListener('click', openCompareModal);
 document.getElementById('runCompareFromModal').addEventListener('click', async () => {
   const fInp1 = document.getElementById('f1').files?.[0];
   const fInp2 = document.getElementById('f2').files?.[0];
+  const fRpt1 = document.getElementById('r1').files?.[0];
+  const fRpt2 = document.getElementById('r2').files?.[0];
 
   if (!fInp1 || !fInp2) {
     alert("Please select both INP files to compare.");
     return;
   }
-
-  // RPT files are optional
-  const fRpt1 = document.getElementById('r1').files?.[0];
-  const fRpt2 = document.getElementById('r2').files?.[0];
 
   const tolerances = {
     "CONDUIT_LENGTH": parseFloat(document.getElementById('tol_conduit_length').value) || 0,
@@ -146,7 +154,6 @@ document.getElementById('runCompareFromModal').addEventListener('click', async (
 
   state.FILES.f1Name = fInp1.name;
   state.FILES.f2Name = fInp2.name;
-
   setStatus("Reading files…");
 
   // Read INP as ArrayBuffer (for Pyodide byte conversion)
@@ -160,9 +167,6 @@ document.getElementById('runCompareFromModal').addEventListener('click', async (
 
   state.FILES.f1Bytes = b1;
   state.FILES.f2Bytes = b2;
-  // TODO: we should probably store RPT text in state too if we want to save/load it properly, 
-  // but for now let's just pass to worker.
-
   setStatus("Running comparison…");
   worker.postMessage({
     type: "compare",
@@ -195,7 +199,7 @@ document.getElementById('themeBtn').addEventListener('click', toggleTheme);
 window.closeModal = closeModal;
 window.closeHelpModal = closeHelpModal;
 window.closeCompareModal = closeCompareModal;
-window.copyRowJSON = copyRowJSON;
+
 
 // Initialize resizable panels
 document.addEventListener('DOMContentLoaded', makeResizable);

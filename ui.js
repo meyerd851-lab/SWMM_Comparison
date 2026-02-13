@@ -1,24 +1,16 @@
 // ==============================================================================
 // UI.JS - USER INTERFACE INTERACTIONS
 // ==============================================================================
-// This file handles all the direct user interactions and DOM manipulations.
-// It includes logic for:
-// 1. Resizable Panels (drag-and-drop resizing)
-// 2. Modals (Help, Detail, Compare)
-// 3. Session Management (Save/Load JSON)
-// 4. Excel Export
-// ==============================================================================
 
 import { state } from './state.js';
 import { abToB64, b64ToAb, escapeHtml, relabelHeaders } from './utils.js';
-import { renderSections, renderSectionList } from './table.js';
+import { renderSections } from './table.js';
 import { drawGeometry } from './map.js';
 
 // ==============================================================================
 // SECTION 1: GLOBAL HELPERS & STATE SETTERS
 // ==============================================================================
 
-// Status setter (will be set by app.js)
 let setStatusCallback = null;
 export function setSetStatusCallback(callback) {
   setStatusCallback = callback;
@@ -28,13 +20,11 @@ function setStatus(s) {
   else document.getElementById('status').textContent = s;
 }
 
-// Theme handling
 export function initTheme() {
   const storedTheme = localStorage.getItem('swmm_theme');
   const prefersLight = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches;
   const theme = storedTheme || (prefersLight ? 'light' : 'dark');
   document.documentElement.setAttribute('data-theme', theme);
-  updateThemeIcon();
 }
 
 export function toggleTheme() {
@@ -42,16 +32,8 @@ export function toggleTheme() {
   const next = current === 'light' ? 'dark' : 'light';
   document.documentElement.setAttribute('data-theme', next);
   localStorage.setItem('swmm_theme', next);
-  updateThemeIcon();
 }
 
-function updateThemeIcon() {
-  const current = document.documentElement.getAttribute('data-theme');
-  const btn = document.getElementById('themeBtn');
-  if (btn) btn.textContent = current === 'light' ? '☀' : '☾';
-}
-
-// Worker reference (will be set by app.js)
 let workerRef = null;
 export function setWorker(worker) {
   workerRef = worker;
@@ -60,82 +42,272 @@ export function setWorker(worker) {
 // ==============================================================================
 // SECTION 2: RESIZABLE PANELS
 // ==============================================================================
-// Logic to allow the user to drag the splitters between the sidebar, map, and
-// detail views.
-// ------------------------------------------------------------------------------
 
-// Resizable panels
 export function makeResizable() {
-  const vSplitter = document.getElementById('v-splitter');
   const mapSplitter = document.getElementById('map-v-splitter');
-  const wrap = document.getElementById('wrap');
-  const left = document.getElementById('left');
-
-  vSplitter.addEventListener('mousedown', (e) => {
-    e.preventDefault();
-    document.body.classList.add('resizing-v');
-    const startX = e.clientX;
-    const startWidth = left.getBoundingClientRect().width;
-
-    const onMouseMove = (moveEvent) => {
-      const newWidth = startWidth + (moveEvent.clientX - startX);
-      if (newWidth > 200 && newWidth < (wrap.clientWidth - 400)) {
-        wrap.style.gridTemplateColumns = `${newWidth}px 5px 1fr`;
-      }
-    };
-    const onMouseUp = () => {
-      document.body.classList.remove('resizing-v');
-      document.removeEventListener('mousemove', onMouseMove);
-      document.removeEventListener('mouseup', onMouseUp);
-    };
-    document.addEventListener('mousemove', onMouseMove);
-    document.addEventListener('mouseup', onMouseUp);
-  });
+  if (!mapSplitter) return;
 
   mapSplitter.addEventListener('mousedown', (e) => {
     e.preventDefault();
-    document.body.classList.add('resizing-v');
+    document.body.style.cursor = 'col-resize';
+
     const detailsWrap = document.getElementById('detailsWrap');
+    const mapWrapper = document.getElementById('map-wrapper');
+
+    // Calculate initial values
     const startX = e.clientX;
-    const startWidth = detailsWrap.querySelector('#tableWrap').getBoundingClientRect().width;
+    const startMapWidth = mapWrapper.getBoundingClientRect().width;
+    const totalWidth = detailsWrap.getBoundingClientRect().width;
 
     const onMouseMove = (moveEvent) => {
-      const newWidth = startWidth + (moveEvent.clientX - startX);
-      if (newWidth > 200 && newWidth < (detailsWrap.clientWidth - 200)) {
-        detailsWrap.style.gridTemplateColumns = `${newWidth}px 5px 1fr`;
-      }
+      // Delta x: moving right (positive) decreases map width, moving left increases it
+      const delta = moveEvent.clientX - startX;
+      let newMapWidth = startMapWidth - delta;
+
+      // Constraints (min 100px)
+      if (newMapWidth < 100) newMapWidth = 100;
+      if (newMapWidth > totalWidth - 200) newMapWidth = totalWidth - 200;
+
+      mapWrapper.style.width = `${newMapWidth}px`;
+
+      // Force map resize event
+      window.dispatchEvent(new Event('resize'));
     };
+
     const onMouseUp = () => {
-      document.body.classList.remove('resizing-v');
+      document.body.style.cursor = '';
       document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
     };
+
     document.addEventListener('mousemove', onMouseMove);
-    document.addEventListener('mouseup', onMouseUp, { once: true });
+    document.addEventListener('mouseup', onMouseUp);
   });
 }
 
 // ==============================================================================
 // SECTION 3: MODAL MANAGEMENT
 // ==============================================================================
-// Functions to open and close the various modal dialogs (Help, Compare, Details).
-// ------------------------------------------------------------------------------
 
-// Help modal
 export function openHelpModal() {
-  document.getElementById('helpModalBackdrop').style.display = 'flex';
+  const el = document.getElementById('helpModalBackdrop');
+  el.classList.add('open');
+  el.style.display = 'flex'; // Ensure flex for centering
 }
 export function closeHelpModal() {
-  document.getElementById('helpModalBackdrop').style.display = 'none';
+  const el = document.getElementById('helpModalBackdrop');
+  el.classList.remove('open');
+  setTimeout(() => { if (!el.classList.contains('open')) el.style.display = 'none'; }, 200);
+}
+
+export function openCompareModal() {
+  const el = document.getElementById('compareModalBackdrop');
+  el.classList.add('open');
+  el.style.display = 'flex';
+}
+export function closeCompareModal() {
+  const el = document.getElementById('compareModalBackdrop');
+  el.classList.remove('open');
+  setTimeout(() => { if (!el.classList.contains('open')) el.style.display = 'none'; }, 200);
+}
+
+// Tolerance Toggle
+const diffToggle = document.getElementById('toggleTolerances');
+if (diffToggle) {
+  diffToggle.onclick = () => {
+    const opts = document.getElementById('toleranceOptions');
+    const arrow = document.getElementById('tolArrow');
+    if (opts.style.display === 'none') {
+      opts.style.display = 'grid';
+      arrow.textContent = '▼';
+    } else {
+      opts.style.display = 'none';
+      arrow.textContent = '▶';
+    }
+  };
+}
+
+// ==============================================================================
+// SECTION 6: DETAIL VIEW
+// ==============================================================================
+
+export function openDetail(section, id) {
+  const { diffs, headers, renames, hydrographs } = state.LAST.json || {};
+  const d = diffs?.[section] || { added: {}, removed: {}, changed: {} };
+  const titleEl = document.getElementById('modalTitle');
+  const metaEl = document.getElementById('modalMeta');
+  const grid = document.getElementById('modalGrid');
+  const onlyChangedBox = document.getElementById('onlyChangedBox');
+
+  // Helper for formatting
+  const fmtNum = (x) => {
+    const v = Number(x);
+    if (!isFinite(v)) return (x && x !== "") ? escapeHtml(x) : "—";
+    const s = v.toLocaleString(undefined, { minimumFractionDigits: 3, maximumFractionDigits: 3 });
+    return s === "-0.000" ? "0.000" : s;
+  };
+
+  // --- HYDROGRAPH SPECIAL HANDLING ---
+  if (section === "HYDROGRAPHS" && id.includes(" ")) {
+    const [hydro, month] = id.split(" ");
+    titleEl.textContent = `HYDROGRAPH · ${hydro} · ${month}`;
+    grid.innerHTML = "";
+    // Reset grid styling for table mode
+    grid.style.display = 'block';
+    grid.style.border = 'none';
+    grid.style.background = 'transparent';
+
+    const params = ["R", "T", "K", "Dmax", "Drecov", "Dinit"];
+    const responses = ["Short", "Medium", "Long"];
+
+    const h1 = (hydrographs?.file1 || {});
+    const h2 = (hydrographs?.file2 || {});
+    function getVals(dict, resp) {
+      return (dict[`${hydro} ${month} ${resp}`] || ["", "", "", "", "", ""]).slice(0, 6);
+    }
+
+    function deltaCell(ov, nv) {
+      if ((ov ?? "") === (nv ?? "")) return `<span class="num">${fmtNum(nv)}</span>`;
+      const vo = Number(ov), vn = Number(nv);
+      const hasNums = isFinite(vo) && isFinite(vn);
+      const delta = hasNums ? vn - vo : null;
+      const dTxt = hasNums ? ` <span class="plusminus" style="font-size:0.8em; opacity:0.8;">(${delta >= 0 ? "+" : ""}${fmtNum(delta)})</span>` : "";
+
+      const oTxt = (ov !== "" && ov !== undefined) ? fmtNum(ov) : "—";
+      const nTxt = (nv !== "" && nv !== undefined) ? fmtNum(nv) : "—";
+
+      return `<div>
+        <span class="old" style="text-decoration:line-through; opacity:0.6; font-size:0.9em;">${oTxt}</span>
+        <span class="arrow">→</span>
+        <span class="new" style="color:var(--changed)">${nTxt}</span>
+        ${dTxt}
+      </div>`;
+    }
+
+    const tbl = document.createElement("table");
+    tbl.className = "data-table"; // Reuse table styles
+    tbl.innerHTML = `<thead>
+      <tr><th>Response</th>${params.map(p => `<th>${p}</th>`).join("")}</tr>
+    </thead><tbody></tbody>`;
+    const tbody = tbl.querySelector("tbody");
+
+    const showOnlyChanged = () => onlyChangedBox.checked;
+
+    for (const resp of responses) {
+      const oldVals = getVals(h1, resp);
+      const newVals = getVals(h2, resp);
+      const rowHasChange = oldVals.some((ov, i) => (ov || "") !== (newVals[i] || ""));
+      if (showOnlyChanged() && !rowHasChange) continue;
+
+      const tr = document.createElement("tr");
+      tr.innerHTML = `<td style="font-weight:600;">${resp}</td>` +
+        params.map((_, i) => {
+          const ov = oldVals[i] || "";
+          const nv = newVals[i] || "";
+          return `<td>${deltaCell(ov, nv)}</td>`;
+        }).join("");
+      tbody.appendChild(tr);
+    }
+
+    metaEl.innerHTML = `<span class="badge" style="background:var(--primary-light); color:var(--primary);">Hydrograph</span>`;
+    grid.appendChild(tbl);
+    onlyChangedBox.onchange = () => openDetail(section, id);
+
+    document.getElementById('modalBackdrop').classList.add('open');
+    document.getElementById('modalBackdrop').style.display = 'flex';
+    return;
+  }
+
+  // --- STANDARD DETAILS ---
+  grid.style.display = 'grid'; // Restore grid
+  grid.style.gridTemplateColumns = '140px 1fr 1fr';
+  grid.style.gap = '1px';
+  grid.style.background = 'var(--border-medium)';
+  grid.style.border = '1px solid var(--border-medium)';
+
+  const hdrsRaw = (headers?.[section] || []).slice();
+  const hdrsLabeled = relabelHeaders(section, hdrsRaw);
+
+  const isAdded = d.added && Object.prototype.hasOwnProperty.call(d.added, id);
+  const isRemoved = d.removed && Object.prototype.hasOwnProperty.call(d.removed, id);
+  const changeType = isAdded ? 'Added' : isRemoved ? 'Removed' : 'Changed';
+
+  let oldArr, newArr;
+  if (isAdded) {
+    oldArr = [];
+    newArr = d.added[id] || [];
+  } else if (isRemoved) {
+    oldArr = d.removed[id] || [];
+    newArr = [];
+  } else {
+    const changedObj = d.changed[id];
+    oldArr = Array.isArray(changedObj) ? changedObj[0] : (changedObj?.values?.[0] || []);
+    newArr = Array.isArray(changedObj) ? changedObj[1] : (changedObj?.values?.[1] || []);
+  }
+
+  // --- SPECIAL HANDLING FOR TITLE SECTION ---
+  if (section === "TITLE") {
+    // Join all lines into a single string to display as one block
+    if (oldArr && oldArr.length > 0) oldArr = [oldArr.join('\n')];
+    if (newArr && newArr.length > 0) newArr = [newArr.join('\n')];
+  }
+
+  titleEl.textContent = `${section} : ${id}`;
+  const renameTo = renames?.[section]?.[id];
+  metaEl.innerHTML = `<span class="badge ${changeType.toLowerCase()}">${changeType}</span>${renameTo ? `<span class="badge" style="margin-left:6px; background:var(--bg-surface-hover); color:var(--text-secondary);">Renamed ↦ ${renameTo}</span>` : ''}`;
+
+  const maxLen = Math.max(oldArr.length, newArr.length) + 1;
+  while (hdrsLabeled.length < maxLen) hdrsLabeled.push(`Field ${hdrsLabeled.length + 1}`);
+
+  grid.innerHTML = `
+    <div class="hdr" style="background:var(--bg-body); padding:8px; font-weight:600;">Field</div>
+    <div class="hdr" style="background:var(--bg-body); padding:8px; font-weight:600;">Old</div>
+    <div class="hdr" style="background:var(--bg-body); padding:8px; font-weight:600;">New</div>
+  `;
+  const showOnlyChanged = () => onlyChangedBox.checked;
+  const pushRow = (label, oldV, newV) => {
+    const changed = (oldV || "") !== (newV || "");
+    if (showOnlyChanged() && !changed) return;
+
+    // Cell styling
+    const cellStyle = "background:var(--bg-surface); padding:8px;";
+    const changedStyle = "background:var(--bg-surface); padding:8px; color:var(--changed); font-weight:500;";
+
+    const oldCell = `<div style="${changed ? changedStyle : cellStyle}">${escapeHtml(oldV || "")}</div>`;
+    const newCell = `<div style="${changed ? changedStyle : cellStyle}">${escapeHtml(newV || "")}</div>`;
+
+    grid.insertAdjacentHTML('beforeend', `<div style="${cellStyle}">${escapeHtml(label)}</div>${oldCell}${newCell}`);
+  };
+
+  const idOld = isAdded ? "" : id;
+  const idNew = isRemoved ? "" : id;
+  pushRow(hdrsLabeled[0] || "ID", idOld, idNew);
+
+  for (let i = 1; i < maxLen; i++) pushRow(hdrsLabeled[i] || `Field ${i}`, oldArr[i - 1], newArr[i - 1]);
+
+  onlyChangedBox.onchange = () => openDetail(section, id);
+  document.getElementById('modalBackdrop').classList.add('open');
+  document.getElementById('modalBackdrop').style.display = 'flex';
+}
+
+export function closeModal() {
+  const el = document.getElementById('modalBackdrop');
+  el.classList.remove('open');
+  setTimeout(() => { if (!el.classList.contains('open')) el.style.display = 'none'; }, 200);
+}
+
+
+
+export function updateFileName(inputId, spanId) {
+  const input = document.getElementById(inputId);
+  const span = document.getElementById(spanId);
+  input.addEventListener('change', () => span.textContent = input.files[0]?.name || 'No file selected');
 }
 
 // ==============================================================================
 // SECTION 4: SESSION MANAGEMENT
 // ==============================================================================
-// Logic to save the current state (files, results, UI settings) to a JSON file
-// and restore it later.
-// ------------------------------------------------------------------------------
 
-// Session management
 export async function saveSession() {
   if (!state.LAST.json) { alert("Run a comparison first."); return; }
 
@@ -167,34 +339,21 @@ export async function saveSession() {
   };
 
   const blob = new Blob([JSON.stringify(session, null, 2)], { type: "application/json" });
-
   const f1Name = state.FILES.f1Name || "file1";
   const f2Name = state.FILES.f2Name || "file2";
   const defaultName = `${f1Name}_vs_${f2Name}.sca`;
 
   if (window.showSaveFilePicker) {
     try {
-      const handle = await window.showSaveFilePicker({
-        suggestedName: defaultName,
-        types: [{
-          description: 'SWMM Comparison Session',
-          accept: { 'application/json': ['.sca'] }
-        }]
-      });
+      const handle = await window.showSaveFilePicker({ suggestedName: defaultName, types: [{ description: 'SWMM Comparison Session', accept: { 'application/json': ['.sca'] } }] });
       const writable = await handle.createWritable();
       await writable.write(blob);
       await writable.close();
       setStatus("Session saved.");
-    } catch (err) {
-      if (err.name !== 'AbortError') console.error("Save failed:", err);
-    }
+    } catch (err) { if (err.name !== 'AbortError') console.error("Save failed:", err); }
   } else {
     const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = defaultName;
-    a.click();
-    URL.revokeObjectURL(url);
+    const a = document.createElement('a'); a.href = url; a.download = defaultName; a.click(); URL.revokeObjectURL(url);
   }
 }
 
@@ -205,12 +364,7 @@ export function applyUIState(ui) {
   document.getElementById('fRemoved').checked = f?.Removed ?? true;
   document.getElementById('fChanged').checked = f?.Changed ?? true;
   if (typeof f.Search === 'string') document.getElementById('search').value = f.Search;
-
-  if (ui.crs && state.PROJECTIONS[ui.crs]) {
-    document.getElementById('crsSelect').value = ui.crs;
-    document.getElementById('crsSelect').dispatchEvent(new Event('change'));
-  }
-
+  if (ui.crs && state.PROJECTIONS[ui.crs]) { document.getElementById('crsSelect').value = ui.crs; document.getElementById('crsSelect').dispatchEvent(new Event('change')); }
   if (ui.tolerances) {
     document.getElementById('tol_conduit_length').value = ui.tolerances.CONDUIT_LENGTH || 0;
     document.getElementById('tol_conduit_offset').value = ui.tolerances.CONDUIT_OFFSET || 0;
@@ -230,8 +384,8 @@ export async function restoreFromResult(result, ui) {
     document.getElementById('currentSectionLabel').textContent = ui.section;
     const { renderTableFor } = await import('./table.js');
     renderTableFor(ui.section);
-    const node = [...document.querySelectorAll('.sec')].find(n => n.dataset.sec === ui.section);
-    document.querySelectorAll('.sec').forEach(n => n.classList.remove('active'));
+    const node = [...document.querySelectorAll('.sec-item')].find(n => n.dataset.sec === ui.section);
+    document.querySelectorAll('.sec-item').forEach(n => n.classList.remove('active'));
     node?.classList.add('active');
   }
   setStatus("Session loaded.");
@@ -241,45 +395,22 @@ export async function loadSession(file) {
   try {
     const text = await file.text();
     const session = JSON.parse(text);
-
     state.FILES = { f1Name: null, f2Name: null, f1Bytes: null, f2Bytes: null };
-    if (session.files?.file1?.bytesB64) {
-      state.FILES.f1Name = session.files.file1.name || "file1.inp";
-      state.FILES.f1Bytes = b64ToAb(session.files.file1.bytesB64);
-    }
-    if (session.files?.file2?.bytesB64) {
-      state.FILES.f2Name = session.files.file2.name || "file2.inp";
-      state.FILES.f2Bytes = b64ToAb(session.files.file2.bytesB64);
-    }
-
-    document.getElementById('f1-name').textContent = state.FILES.f1Name || '';
-    document.getElementById('f2-name').textContent = state.FILES.f2Name || '';
-
-    if (session.result) {
-      await restoreFromResult(session.result, session.ui);
-    } else if (state.FILES.f1Bytes && state.FILES.f2Bytes) {
-      setStatus("Recomputing comparison from saved INP files…");
-      const tolerances = session.ui?.tolerances || {};
-      if (workerRef) {
-        workerRef.postMessage({ type: "compare", file1: state.FILES.f1Bytes, file2: state.FILES.f2Bytes, tolerances: tolerances });
-      }
-    } else {
-      alert("Session file has no result data and no embedded INP files. Please select the INP files and run Compare.");
-    }
-  } catch (e) {
-    console.error(e);
-    alert("Could not load session: " + e.message);
-  }
+    if (session.files?.file1?.bytesB64) { state.FILES.f1Name = session.files.file1.name || "file1.inp"; state.FILES.f1Bytes = b64ToAb(session.files.file1.bytesB64); }
+    if (session.files?.file2?.bytesB64) { state.FILES.f2Name = session.files.file2.name || "file2.inp"; state.FILES.f2Bytes = b64ToAb(session.files.file2.bytesB64); }
+    document.getElementById('f1-name').textContent = state.FILES.f1Name || ''; document.getElementById('f2-name').textContent = state.FILES.f2Name || '';
+    if (session.result) { await restoreFromResult(session.result, session.ui); }
+    else if (state.FILES.f1Bytes && state.FILES.f2Bytes) {
+      setStatus("Recomputing comparison...");
+      if (workerRef) workerRef.postMessage({ type: "compare", file1: state.FILES.f1Bytes, file2: state.FILES.f2Bytes, tolerances: session.ui?.tolerances || {} });
+    } else { alert("Session file partial/empty."); }
+  } catch (e) { console.error(e); alert("Load failed: " + e.message); }
 }
 
 // ==============================================================================
 // SECTION 5: EXCEL EXPORT
 // ==============================================================================
-// Generates an Excel (.xlsx) file containing the comparison results.
-// It uses the SheetJS (xlsx) library.
-// ------------------------------------------------------------------------------
 
-// Excel export
 export async function exportToExcel() {
   if (!state.LAST.json) { alert("Please run a comparison first."); return; }
   setStatus("Generating Excel file...");
@@ -336,12 +467,40 @@ export async function exportToExcel() {
     let hdrs = headers[sec] ? [...headers[sec]] : [];
 
     if (sec === "HYDROGRAPHS") {
-      hdrs = ["Hydrograph", "Month", "Change Type"];
-      sheetData.push(["Element ID", "Change", ...hdrs]);
-      const { groupHydroSummary } = await import('./table.js');
-      const rows = groupHydroSummary(d);
+      hdrs = ["Hydrograph", "Month", "Response", "R", "T", "K", "Dmax", "Drecov", "Dinit"];
+      sheetData.push(["Change", ...hdrs]);
+
+      const rows = [];
+      const push = (type, key, valsOld, valsNew) => {
+        const parts = key.split(" ");
+        const hydro = parts[0] || "";
+        const month = parts[1] || "";
+        const response = parts.slice(2).join(" ") || "";
+        rows.push({ type, hydro, month, response, valsOld, valsNew });
+      };
+
+      for (const [k, v] of Object.entries(d.added || {})) push("Added", k, [], v);
+      for (const [k, v] of Object.entries(d.removed || {})) push("Removed", k, v, []);
+      for (const [k, v] of Object.entries(d.changed || {})) {
+        const ov = Array.isArray(v) ? v[0] : (v.values?.[0] || []);
+        const nv = Array.isArray(v) ? v[1] : (v.values?.[1] || []);
+        push("Changed", k, ov, nv);
+      }
+
+      rows.sort((a, b) => (a.hydro + a.month + a.response).localeCompare(b.hydro + b.month + b.response));
+
       rows.forEach(r => {
-        sheetData.push([`${r.hydro} ${r.month}`, r.changeType.includes("Added") || r.changeType.includes("Removed") ? r.changeType.split(',')[0] : "Changed", r.hydro, r.month, r.changeType]);
+        const row = [r.type, r.hydro, r.month, r.response];
+        // For remaining 6 params (R...Dinit)
+        for (let i = 0; i < 6; i++) {
+          const ov = r.valsOld[i] || "";
+          const nv = r.valsNew[i] || "";
+
+          if (r.type === "Added") row.push(nv);
+          else if (r.type === "Removed") row.push(ov);
+          else row.push((ov === nv) ? nv : `${ov} -> ${nv}`);
+        }
+        sheetData.push(row);
       });
     } else {
       hdrs = relabelHeaders(sec, hdrs);
@@ -462,220 +621,19 @@ export async function exportToShapefile() {
   }
 }
 
-// ==============================================================================
-// SECTION 6: DETAIL VIEW
-// ==============================================================================
-// Displays the side-by-side comparison of a specific element (node, link, etc.)
-// in a modal or side panel.
-// ------------------------------------------------------------------------------
+export function copyRowJSON(id, section) {
+  const { diffs } = state.LAST.json || {};
+  if (!diffs || !diffs[section]) return;
+  const d = diffs[section];
 
-// Detail modal
-export function openDetail(section, id) {
-  const { diffs, headers, renames, hydrographs } = state.LAST.json || {};
-  const d = diffs?.[section] || { added: {}, removed: {}, changed: {} };
-  const titleEl = document.getElementById('modalTitle');
-  const metaEl = document.getElementById('modalMeta');
-  const grid = document.getElementById('modalGrid');
-  const onlyChangedBox = document.getElementById('onlyChangedBox');
+  let data = null;
+  if (d.added && d.added[id]) data = { status: 'Added', value: d.added[id] };
+  else if (d.removed && d.removed[id]) data = { status: 'Removed', value: d.removed[id] };
+  else if (d.changed && d.changed[id]) data = { status: 'Changed', value: d.changed[id] };
 
-  if (section === "HYDROGRAPHS" && id.includes(" ")) {
-    const [hydro, month] = id.split(" ");
-    titleEl.textContent = `HYDROGRAPH · ${hydro} · ${month}`;
-    grid.innerHTML = "";
-
-    const params = ["R", "T", "K", "Dmax", "Drecov", "Dinit"];
-    const responses = ["Short", "Medium", "Long"];
-
-    const h1 = (hydrographs?.file1 || {});
-    const h2 = (hydrographs?.file2 || {});
-    function getVals(dict, resp) {
-      return (dict[`${hydro} ${month} ${resp}`] || ["", "", "", "", "", ""]).slice(0, 6);
-    }
-
-    function fmtNum(x) {
-      const v = Number(x);
-      if (!isFinite(v)) return (x && x !== "") ? escapeHtml(x) : "—";
-      const s = v.toLocaleString(undefined, { minimumFractionDigits: 3, maximumFractionDigits: 3 });
-      return s === "-0.000" ? "0.000" : s;
-    }
-
-    function deltaCell(ov, nv) {
-      if ((ov ?? "") === (nv ?? "")) return `<span class="num">${fmtNum(nv)}</span>`;
-      const vo = Number(ov), vn = Number(nv);
-      const hasNums = isFinite(vo) && isFinite(vn);
-      const delta = hasNums ? vn - vo : null;
-      const dTxt = hasNums ? ` <span class="plusminus">(${delta >= 0 ? "+" : ""}${fmtNum(delta)})</span>` : "";
-      const oTxt = (ov !== "" && ov !== undefined) ? fmtNum(ov) : "—";
-      const nTxt = (nv !== "" && nv !== undefined) ? fmtNum(nv) : "—";
-      return `<span class="delta"><span class="old">${oTxt}</span><span class="arrow">→</span><span class="diff">${nTxt}</span>${dTxt}</span>`;
-    }
-
-    const tbl = document.createElement("table");
-    tbl.className = "modal-hydro";
-    tbl.innerHTML = `<thead>
-      <tr><th class="resp">Response</th>${params.map(p => `<th>${p}</th>`).join("")}</tr>
-    </thead><tbody></tbody>`;
-    const tbody = tbl.querySelector("tbody");
-
-    const showOnlyChanged = () => onlyChangedBox.checked;
-
-    for (const resp of responses) {
-      const oldVals = getVals(h1, resp);
-      const newVals = getVals(h2, resp);
-      const rowHasChange = oldVals.some((ov, i) => (ov || "") !== (newVals[i] || ""));
-      if (showOnlyChanged() && !rowHasChange) continue;
-
-      const tr = document.createElement("tr");
-      tr.innerHTML = `<td style="padding:6px 8px;font-weight:600;">${resp}</td>` +
-        params.map((_, i) => {
-          const ov = oldVals[i] || "";
-          const nv = newVals[i] || "";
-          return `<td>${deltaCell(ov, nv)}</td>`;
-        }).join("");
-      tbody.appendChild(tr);
-    }
-
-    metaEl.innerHTML = `<span class="tag">Hydrograph</span>`;
-    grid.appendChild(tbl);
-    onlyChangedBox.onchange = () => openDetail(section, id);
-    document.getElementById('modalBackdrop').style.display = 'flex';
-    return;
+  if (data) {
+    navigator.clipboard.writeText(JSON.stringify(data, null, 2))
+      .then(() => console.log('Row JSON copied'))
+      .catch(err => console.error('Copy failed', err));
   }
-
-  const hdrsRaw = (headers?.[section] || []).slice();
-  const hdrsLabeled = relabelHeaders(section, hdrsRaw);
-
-  const isAdded = d.added && Object.prototype.hasOwnProperty.call(d.added, id);
-  const isRemoved = d.removed && Object.prototype.hasOwnProperty.call(d.removed, id);
-  const changeType = isAdded ? 'Added' : isRemoved ? 'Removed' : 'Changed';
-
-  let oldArr, newArr;
-  if (isAdded) {
-    oldArr = [];
-    newArr = d.added[id] || [];
-  } else if (isRemoved) {
-    oldArr = d.removed[id] || [];
-    newArr = [];
-  } else {
-    const changedObj = d.changed[id];
-    oldArr = Array.isArray(changedObj) ? changedObj[0] : (changedObj?.values?.[0] || []);
-    newArr = Array.isArray(changedObj) ? changedObj[1] : (changedObj?.values?.[1] || []);
-  }
-
-  titleEl.textContent = `${section} · ${id}`;
-  const renameTo = renames?.[section]?.[id];
-  metaEl.innerHTML = `<span class="tag">${changeType}</span>${renameTo ? `<span class="tag" style="margin-left:6px">Renamed ↦ ${renameTo}</span>` : ''}`;
-
-  const maxLen = Math.max(oldArr.length, newArr.length) + 1;
-  while (hdrsLabeled.length < maxLen) hdrsLabeled.push(`Field ${hdrsLabeled.length + 1}`);
-
-  grid.innerHTML = `
-    <div class="hdr">Field</div>
-    <div class="hdr">Old</div>
-    <div class="hdr">New</div>
-  `;
-  const showOnlyChanged = () => onlyChangedBox.checked;
-  const pushRow = (label, oldV, newV) => {
-    const changed = (oldV || "") !== (newV || "");
-    if (showOnlyChanged() && !changed) return;
-    const oldCell = changed ? `<span class="cell-changed">${escapeHtml(oldV || "")}</span>` : escapeHtml(oldV || "");
-    const newCell = changed ? `<span class="cell-changed">${escapeHtml(newV || "")}</span>` : escapeHtml(newV || "");
-    grid.insertAdjacentHTML('beforeend', `<div>${escapeHtml(label)}</div><div>${oldCell}</div><div>${newCell}</div>`);
-  };
-
-  const idOld = isAdded ? "" : id;
-  const idNew = isRemoved ? "" : id;
-  pushRow(hdrsLabeled[0] || "ID", idOld, idNew);
-
-  for (let i = 1; i < maxLen; i++) pushRow(hdrsLabeled[i] || `Field ${i}`, oldArr[i - 1], newArr[i - 1]);
-
-  onlyChangedBox.onchange = () => openDetail(section, id);
-  document.getElementById('modalBackdrop').style.display = 'flex';
 }
-
-export function closeModal() {
-  document.getElementById('modalBackdrop').style.display = 'none';
-}
-
-export function copyRowJSON() {
-  const section = state.LAST.currentSection;
-  if (!section) return;
-  const d = state.LAST.json?.diffs?.[section] || {};
-  const rawTitle = document.getElementById('modalTitle').textContent;
-  const parts = rawTitle.split('·').map(s => s.trim());
-  const id = parts[parts.length - 1];
-
-  let oldArr = [], newArr = [];
-  if (d.added && Object.prototype.hasOwnProperty.call(d.added, id)) {
-    newArr = d.added[id] || [];
-  } else if (d.removed && Object.prototype.hasOwnProperty.call(d.removed, id)) {
-    oldArr = d.removed[id] || [];
-  } else if (d.changed && Object.prototype.hasOwnProperty.call(d.changed, id)) {
-    const changedObj = d.changed[id];
-    oldArr = Array.isArray(changedObj) ? changedObj[0] : (changedObj.values?.[0] || []);
-    newArr = Array.isArray(changedObj) ? changedObj[1] : (changedObj.values?.[1] || []);
-  }
-
-  const entry = {
-    section,
-    id,
-    headers: relabelHeaders(section, (state.LAST.json?.headers?.[section] || [])),
-    old: oldArr,
-    new: newArr,
-  };
-  navigator.clipboard.writeText(JSON.stringify(entry, null, 2));
-  alert("Row JSON copied.");
-}
-
-// File name display
-export function updateFileName(inputId, spanId) {
-  const input = document.getElementById(inputId);
-  const span = document.getElementById(spanId);
-  input.addEventListener('change', () => span.textContent = input.files[0]?.name || 'No file selected');
-}
-
-// Compare modal
-export function openCompareModal() {
-  document.getElementById('compareModalBackdrop').style.display = 'flex';
-}
-export function closeCompareModal() {
-  document.getElementById('compareModalBackdrop').style.display = 'none';
-}
-
-
-// ==============================================================================
-// SECTION 7: TABS & VIEW SWITCHING
-// ==============================================================================
-
-export function switchTab(mode) {
-  // mode: 'INP' or 'RESULTS'
-  state.UI_MODE = mode;
-
-  // Update Tab Styling
-  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-  document.getElementById(mode === 'INP' ? 'tabInp' : 'tabRes').classList.add('active');
-
-  // Update Sidebar (Sections)
-  renderSectionList();
-
-
-  // Update Filters visibility
-  const inpFilters = document.getElementById('filter-group-inp');
-  if (mode === 'RESULTS') {
-    inpFilters.style.display = 'none';
-  } else {
-    inpFilters.style.display = 'flex';
-  }
-
-  // Clear Detail View
-  document.getElementById('table').innerHTML = "";
-  document.getElementById('currentSectionLabel').textContent = "";
-
-  // Clear Map or Reset Map Mode
-  import('./map.js').then(mod => mod.setMapMode(mode));
-}
-
-// Make globally available for onclick events in HTML
-window.switchTab = switchTab;
-
-
