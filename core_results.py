@@ -475,8 +475,7 @@ def build_section_side_by_side(
     if metric_cfg:
         computed_col_name = metric_cfg[2]
         # Insert computed column after Status or at end? user said part of table.
-        # Let's put it at the very end or right after ID?
-        # End is safer for existing logic.
+
     
     out_cols = [id_col] + [f"{c} (A)" for c in base_cols] + [f"{c} (B)" for c in base_cols] + ["Status"]
     if computed_col_name:
