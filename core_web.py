@@ -1355,7 +1355,7 @@ def _filter_changes_by_tolerance(diffs: Dict[str, DiffSection], tolerances: Dict
 # =========================
 # Public entrypoint for the web worker
 # =========================
-def run_compare(file1_bytes, file2_bytes, tolerances_py=None) -> str:
+def run_compare(file1_bytes, file2_bytes, tolerances_py=None, progress_callback=None) -> str:
     """
     Main entry point for the comparison logic.
     
@@ -1363,10 +1363,14 @@ def run_compare(file1_bytes, file2_bytes, tolerances_py=None) -> str:
         file1_bytes: Content of the first INP file (bytes or string).
         file2_bytes: Content of the second INP file (bytes or string).
         tolerances_py: Optional dictionary of tolerance values (e.g., {"CONDUIT_LENGTH": 0.1}).
+        progress_callback: Optional JS callback for progress updates.
         
     Returns:
         str: A JSON string containing the full comparison results, geometry, and summaries.
     """
+    if progress_callback:
+        progress_callback(10, "Parsing files...")
+
     f1 = _to_text_io(file1_bytes)
     f2 = _to_text_io(file2_bytes)
 
