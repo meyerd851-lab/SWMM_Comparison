@@ -181,24 +181,35 @@ export function openDetail(section, id) {
     grid.style.border = 'none';
     grid.style.background = 'transparent';
 
-    const params = ["R", "T", "K", "Dmax", "Drecov", "Dinit"];
+    const params = ["R", "T", "K", "Dmax", "Drecov", "Dinit", "RainGage"];
     const responses = ["Short", "Medium", "Long"];
 
     const h1 = (hydrographs?.file1 || {});
     const h2 = (hydrographs?.file2 || {});
     function getVals(dict, resp) {
-      return (dict[`${hydro} ${month} ${resp}`] || ["", "", "", "", "", ""]).slice(0, 6);
+      return (dict[`${hydro} ${month} ${resp}`] || ["", "", "", "", "", "", ""]).slice(0, 7);
     }
 
-    function deltaCell(ov, nv) {
+    function deltaCell(ov, nv, isNumeric = true) {
       if ((ov ?? "") === (nv ?? "")) return `<span class="num">${fmtNum(nv)}</span>`;
+
       const vo = Number(ov), vn = Number(nv);
-      const hasNums = isFinite(vo) && isFinite(vn);
+      // Only calc delta if both are present, numeric, and isNumeric flag is true
+      const bothPresent = (ov !== "" && ov !== undefined) && (nv !== "" && nv !== undefined);
+      const hasNums = isNumeric && bothPresent && isFinite(vo) && isFinite(vn);
       const delta = hasNums ? vn - vo : null;
       const dTxt = hasNums ? ` <span class="plusminus" style="font-size:0.8em; opacity:0.8;">(${delta >= 0 ? "+" : ""}${fmtNum(delta)})</span>` : "";
 
       const oTxt = (ov !== "" && ov !== undefined) ? fmtNum(ov) : "—";
       const nTxt = (nv !== "" && nv !== undefined) ? fmtNum(nv) : "—";
+
+      // If one is missing, treat as Added/Removed without arrow
+      if (ov === "" || ov === undefined) {
+        return `<span style="color:var(--added)">${nTxt}</span>`;
+      }
+      if (nv === "" || nv === undefined) {
+        return `<span style="color:var(--removed)">${oTxt}</span>`;
+      }
 
       return `<div>
         <span class="old" style="text-decoration:line-through; opacity:0.6; font-size:0.9em;">${oTxt}</span>
@@ -228,7 +239,9 @@ export function openDetail(section, id) {
         params.map((_, i) => {
           const ov = oldVals[i] || "";
           const nv = newVals[i] || "";
-          return `<td>${deltaCell(ov, nv)}</td>`;
+          // RainGage (index 6, last param) is not numeric for deltas
+          const isNum = i !== 6;
+          return `<td>${deltaCell(ov, nv, isNum)}</td>`;
         }).join("");
       tbody.appendChild(tr);
     }
@@ -692,7 +705,7 @@ export async function exportToExcel() {
     let hdrs = headers[sec] ? [...headers[sec]] : [];
 
     if (sec === "HYDROGRAPHS") {
-      hdrs = ["Hydrograph", "Month", "Response", "R", "T", "K", "Dmax", "Drecov", "Dinit"];
+      hdrs = ["Hydrograph", "Month", "Response", "R", "T", "K", "Dmax", "Drecov", "Dinit", "RainGage"];
       sheetData.push(["Change", ...hdrs]);
 
       const rows = [];
@@ -716,8 +729,8 @@ export async function exportToExcel() {
 
       rows.forEach(r => {
         const row = [r.type, r.hydro, r.month, r.response];
-        // For remaining 6 params (R...Dinit)
-        for (let i = 0; i < 6; i++) {
+        // For remaining 7 params (R...Dinit...RainGage)
+        for (let i = 0; i < 7; i++) {
           const ov = r.valsOld[i] || "";
           const nv = r.valsNew[i] || "";
 

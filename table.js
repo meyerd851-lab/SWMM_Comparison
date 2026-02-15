@@ -210,7 +210,7 @@ export function renderTableFor(sec) {
   if (sec === "HYDROGRAPHS") {
 
     const rows = groupHydroSummary(d);
-    const hdrs = ["Hydrograph", "Month", "ChangeType"];
+    const hdrs = ["Hydrograph", "Month", "RainGage", "ChangeType"];
 
     // Add empty header for details column
     let thead = `<thead><tr><th style="width:40px"></th><th style="width:180px">ElementID</th><th style="width:110px">Change</th>`;
@@ -239,7 +239,28 @@ export function renderTableFor(sec) {
              </button></td>`;
       tr += `<td>${escapeHtml(`${r.hydro} ${r.month}`)}</td>`;
       tr += `<td><span class="badge ${badge}">${type}</span></td>`;
-      tr += `<td>${escapeHtml(r.hydro)}</td><td>${escapeHtml(r.month)}</td><td>${escapeHtml(r.changeType)}</td>`;
+      // Lookup RainGage
+      const hydroFile = state.LAST.json.hydrographs || {};
+      const h2 = hydroFile.file2 || {};
+      const h1 = hydroFile.file1 || {};
+
+      // Try to find any entry for this hydrograph to get the gage
+      // Keys are "Hydro Month Response"
+      const findGage = (dict, h, m) => {
+        const keyPrefix = `${h} ${m} `;
+        const key = Object.keys(dict).find(k => k.startsWith(keyPrefix));
+        if (key && dict[key]) {
+          const arr = dict[key];
+          // RainGage is the last element (index 9, or last)
+          return arr[arr.length - 1] || "";
+        }
+        return "";
+      };
+
+      let gage = findGage(h2, r.hydro, r.month);
+      if (!gage) gage = findGage(h1, r.hydro, r.month); // If removed
+
+      tr += `<td>${escapeHtml(r.hydro)}</td><td>${escapeHtml(r.month)}</td><td>${escapeHtml(gage)}</td><td>${escapeHtml(r.changeType)}</td>`;
       tr += `</tr>`;
       body.push(tr);
     }

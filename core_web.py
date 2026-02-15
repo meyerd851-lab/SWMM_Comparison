@@ -427,7 +427,8 @@ SECTION_HEADERS = {
         "K",
         "Dmax",
         "Drecov",
-        "Dinit"
+        "Dinit",
+        "RainGage"
     ],
 
     "LOADINGS": [
@@ -557,6 +558,7 @@ def _parse_inp_iter(lines) -> INPParseResult:
     # temp_points: Dict[str, Dict[str, List]] (Section -> ID -> List[(x,y)])
     temp_curves: Dict[str, Dict] = {} 
     temp_points: Dict[str, Dict[str, List]] = defaultdict(lambda: defaultdict(list))
+    temp_hydro_gages: Dict[str, str] = {}
 
     current = None  # The current section being parsed (e.g., "JUNCTIONS")
     current_control_rule = None
@@ -652,11 +654,11 @@ def _parse_inp_iter(lines) -> INPParseResult:
             # Format 1: Mapping to a Rain Gage (e.g., "Hydro1  Gage1")
             if len(tokens) == 2:
                 hydrograph_id, gage_name = tokens[0], tokens[1]
-                g_sec = 'HYDROGRAPH_RAINGAGES'
-                sections.setdefault(g_sec, {})
-                headers.setdefault(g_sec, ['Hydrograph', 'Gage'])
-                descriptions.setdefault(g_sec, 'Hydrograph to Rain Gage Mapping')
-                sections[g_sec][hydrograph_id] = [gage_name]
+            # Format 1: Mapping to a Rain Gage (e.g., "Hydro1  Gage1")
+            if len(tokens) == 2:
+                hydrograph_id, gage_name = tokens[0], tokens[1]
+                # Store mapping in temp dict
+                temp_hydro_gages[hydrograph_id] = gage_name
             # Format 2: Hydrograph Parameters (e.g., "Hydro1  JAN  SHORT  0.1  0.2 ...")
             elif len(tokens) >= 9:
                 hydrograph, month, response = tokens[0], tokens[1], tokens[2]
@@ -664,7 +666,7 @@ def _parse_inp_iter(lines) -> INPParseResult:
                 values = tokens[3:9]
                 sections[current][key] = values
                 headers[current] = [
-                    'Hydrograph', 'Month', 'Response', 'R', 'T', 'K', 'Dmax', 'Drecov', 'Dinit'
+                    'Hydrograph', 'Month', 'Response', 'R', 'T', 'K', 'Dmax', 'Drecov', 'Dinit', 'RainGage'
                 ]
             continue
 
@@ -769,6 +771,18 @@ def _parse_inp_iter(lines) -> INPParseResult:
                 # points is list of (x,y) tuples
                 sections[sec_name][eid] = [json.dumps(points)]
 
+    # Finalize HYDROGRAPHS: Inject Rain Gage
+    if "HYDROGRAPHS" in sections and temp_hydro_gages:
+        gages = temp_hydro_gages
+        for key, values in sections["HYDROGRAPHS"].items():
+            # Key is "HydroID Month Response"
+            # We need HydroID to look up gage
+            parts = key.split(" ", 1)
+            if parts:
+                hid = parts[0]
+                gage = gages.get(hid, "")
+                values.append(gage)
+    
     return INPParseResult(sections, headers, tags, descriptions)
 
 
