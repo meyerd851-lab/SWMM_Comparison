@@ -260,6 +260,37 @@ export function buildSets(diffs, renames) {
 const labelsLayer = L.layerGroup().addTo(map);
 const LABEL_ZOOM_THRESHOLD = 16; // Slightly lowered threshold
 
+// Helper for label collision
+function getLabelBbox(point, text, type) {
+  // Approximate sizes:
+  // Font ~12px? Width approx 7px per char?
+  const charWidth = 7;
+  const padding = 24; // Increased from 8 to 30 for less clutter
+  const height = 18;
+  const width = (text.length * charWidth) + padding;
+
+  // Point is the anchor.
+  // If direction is 'top' (nodes), anchor is bottom-center of box.
+  // If direction is 'center' (links/subs), anchor is center-center of box.
+
+  let x = point.x - (width / 2);
+  let y = point.y;
+
+  if (type === 'node') {
+    // anchor is bottom-center, so box is above
+    y = point.y - height - 5; // -5 offset
+  } else {
+    // center-center (approx)
+    y = point.y - (height / 2);
+  }
+
+  return { x, y, w: width, h: height, r: x + width, b: y + height };
+}
+
+function isOverlapping(a, b) {
+  return (a.x < b.r && a.r > b.x && a.y < b.b && a.b > b.y);
+}
+
 export function drawLabels(json) {
   labelsLayer.clearLayers();
   if (map.getZoom() < LABEL_ZOOM_THRESHOLD) return;
@@ -273,65 +304,100 @@ export function drawLabels(json) {
   const geom = json.geometry;
   const bounds = map.getBounds();
 
-  // Filter Logic
-  let validNodes = null;
-  let validSubs = null;
-  let validLinks = null;
+  // Collision Registry
+  const drawnBoxes = [];
 
+  // Priorities: Nodes > Subs > Links? Or Subs > Nodes? 
+  // Let's do Nodes -> Subs -> Links.
+
+  // Filter Logic
+  let validNodes = null, validSubs = null, validLinks = null;
   if (currentFilterMode !== 'Default') {
     const sets = buildSets(json.diffs, json.renames);
-    const modeKey = currentFilterMode.toLowerCase(); // 'added', 'removed', 'changed'
+    const modeKey = currentFilterMode.toLowerCase();
     validNodes = sets.nodes[modeKey];
     validSubs = sets.subs[modeKey];
     validLinks = sets.links[modeKey];
   }
 
-  // Draw Node Labels
+  // --- DRAW NODES ---
   if (showNodes) {
-    const nodeKeys = new Set([...(Object.keys(geom.nodes2 || {})), ...(Object.keys(geom.nodes1 || {}))]);
-    nodeKeys.forEach(id => {
+    const nodeKeys = Object.keys(geom.nodes2 || {}).concat(Object.keys(geom.nodes1 || {}));
+    // Dedup
+    const unique = new Set(nodeKeys);
+    unique.forEach(id => {
       if (validNodes && !validNodes.has(id)) return;
       const xy = (geom.nodes2 && geom.nodes2[id]) || (geom.nodes1 && geom.nodes1[id]);
       if (!xy) return;
       const ll = xyToLatLng(xy[0], xy[1]);
       if (bounds.contains(ll)) {
-        L.tooltip({ permanent: true, direction: 'top', className: 'map-label', offset: [0, -5] })
-          .setLatLng(ll).setContent(id).addTo(labelsLayer);
+        const pt = map.latLngToContainerPoint(ll);
+        const bbox = getLabelBbox(pt, id, 'node');
+
+        // Check collision
+        let hit = false;
+        for (const b of drawnBoxes) {
+          if (isOverlapping(bbox, b)) { hit = true; break; }
+        }
+
+        if (!hit) {
+          drawnBoxes.push(bbox);
+          L.tooltip({ permanent: true, direction: 'top', className: 'map-label', offset: [0, -5] })
+            .setLatLng(ll).setContent(id).addTo(labelsLayer);
+        }
       }
     });
   }
 
-  // Draw Subcatchment Labels
+  // --- DRAW SUBS ---
   if (showSubs) {
-    const subKeys = new Set([...(Object.keys(geom.subs2 || {})), ...(Object.keys(geom.subs1 || {}))]);
+    const subKeys = new Set([...Object.keys(geom.subs2 || {}), ...Object.keys(geom.subs1 || {})]);
     subKeys.forEach(id => {
       if (validSubs && !validSubs.has(id)) return;
       const coords = (geom.subs2 && geom.subs2[id]) || (geom.subs1 && geom.subs1[id]);
       if (!coords || coords.length < 3) return;
-      const centerXY = centroidOfPoly(coords); // Use centroid
+      const centerXY = centroidOfPoly(coords);
       if (!centerXY) return;
       const ll = xyToLatLng(centerXY[0], centerXY[1]);
       if (bounds.contains(ll)) {
-        L.tooltip({ permanent: true, direction: 'center', className: 'map-label' }).setLatLng(ll).setContent(id).addTo(labelsLayer);
+        const pt = map.latLngToContainerPoint(ll);
+        const bbox = getLabelBbox(pt, id, 'sub');
+
+        let hit = false;
+        for (const b of drawnBoxes) if (isOverlapping(bbox, b)) { hit = true; break; }
+
+        if (!hit) {
+          drawnBoxes.push(bbox);
+          L.tooltip({ permanent: true, direction: 'center', className: 'map-label' })
+            .setLatLng(ll).setContent(id).addTo(labelsLayer);
+        }
       }
     });
   }
 
-  // Draw Link Labels (Conduits)
+  // --- DRAW LINKS ---
   if (showLinks) {
-    const linkKeys = new Set([...(Object.keys(geom.links2 || {})), ...(Object.keys(geom.links1 || {}))]);
+    const linkKeys = new Set([...Object.keys(geom.links2 || {}), ...Object.keys(geom.links1 || {})]);
     linkKeys.forEach(id => {
       if (validLinks && !validLinks.has(id)) return;
       const coords = (geom.links2 && geom.links2[id]) || (geom.links1 && geom.links1[id]);
       if (!coords) return;
-      // Calculate midpoint for label
       const mid = midOfLine(coords);
       if (!mid) return;
       const ll = xyToLatLng(mid[0], mid[1]);
 
       if (bounds.contains(ll)) {
-        L.tooltip({ permanent: true, direction: 'center', className: 'map-label' })
-          .setLatLng(ll).setContent(id).addTo(labelsLayer);
+        const pt = map.latLngToContainerPoint(ll);
+        const bbox = getLabelBbox(pt, id, 'link');
+
+        let hit = false;
+        for (const b of drawnBoxes) if (isOverlapping(bbox, b)) { hit = true; break; }
+
+        if (!hit) {
+          drawnBoxes.push(bbox);
+          L.tooltip({ permanent: true, direction: 'center', className: 'map-label' })
+            .setLatLng(ll).setContent(id).addTo(labelsLayer);
+        }
       }
     });
   }

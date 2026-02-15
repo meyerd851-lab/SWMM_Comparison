@@ -199,12 +199,10 @@ SECTION_HEADERS = {
 
     "DIVIDERS": [
         "Name",
-        "Node",         # Inlet node
-        "Link",         # Main conduit
+        "Elevation",         # Inlet node
+        "Diverted Link",         # Main conduit
         "Type",         # CUTOFF / OVERFLOW / TABULAR / WEIR / CUSTOM
-        "Qmin",         # or parameters depending on Type
-        "Qmax",
-        "P1", "P2", "P3"
+        "P1", "P2", "P3", "P4", "P5"
     ],
 
     "STORAGE": [
@@ -297,12 +295,15 @@ SECTION_HEADERS = {
     "STREETS": [
         "Name",
         "Tcrown",
-        "Sx",           # gutter slopes
-        "Wcurb",
-        "Wstreet",
-        "Nstreet",
-        "Ncurb",
-        "Soffset"
+        "Hcurb",           # gutter slopes
+        "Sx",
+        "nRoad",
+        "a",
+        "W",
+        "Sides",
+        "Tback",
+        "Sback",
+        "nBack"
     ],
 
     "INLETS": [
