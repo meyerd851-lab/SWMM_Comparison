@@ -234,7 +234,7 @@ export const secType = (sec) => (
       sec === "SUBCATCHMENTS" ? "subs" : null
 );
 
-export function buildSets(diffs, renames) {
+export function buildSets(diffs, renames, geometryChanges) {
   const sets = {
     nodes: { added: new Set(), removed: new Set(), changed: new Set(), base: new Set() },
     links: { added: new Set(), removed: new Set(), changed: new Set(), base: new Set() },
@@ -249,6 +249,12 @@ export function buildSets(diffs, renames) {
   for (const [sec, mapping] of Object.entries(renames || {})) {
     const t = secType(sec); if (!t) continue;
     Object.keys(mapping).forEach(oldId => sets[t].changed.add(oldId));
+  }
+  // Merge geometry-only changes into the changed sets
+  if (geometryChanges) {
+    (geometryChanges.nodes || []).forEach(id => sets.nodes.changed.add(id));
+    (geometryChanges.links || []).forEach(id => sets.links.changed.add(id));
+    (geometryChanges.subs || []).forEach(id => sets.subs.changed.add(id));
   }
   return sets;
 }
@@ -313,7 +319,7 @@ export function drawLabels(json) {
   // Filter Logic
   let validNodes = null, validSubs = null, validLinks = null;
   if (currentFilterMode !== 'Default') {
-    const sets = buildSets(json.diffs, json.renames);
+    const sets = buildSets(json.diffs, json.renames, json.geometry_changes);
     const modeKey = currentFilterMode.toLowerCase();
     validNodes = sets.nodes[modeKey];
     validSubs = sets.subs[modeKey];
@@ -425,7 +431,7 @@ function resetLayers() {
 export function drawGeometry(json) {
   resetLayers();
   const geom = json.geometry;
-  const sets = buildSets(json.diffs, json.renames);
+  const sets = buildSets(json.diffs, json.renames, json.geometry_changes);
 
   const collectBase = (obj1, obj2) => new Set([...Object.keys(obj1 || {}), ...Object.keys(obj2 || {})]);
   sets.nodes.base = collectBase(json.geometry.nodes1, json.geometry.nodes2);
@@ -669,12 +675,17 @@ window.cycleMapPopup = function (direction) {
 
 
 function generatePopupContent(section, id, expectedState) {
-  const { diffs, headers, renames } = state.LAST.json || {};
+  const { diffs, headers, renames, geometry_changes } = state.LAST.json || {};
   const d = diffs?.[section] || { added: {}, removed: {}, changed: {} };
 
   const isAdded = d.added && Object.prototype.hasOwnProperty.call(d.added, id);
   const isRemoved = d.removed && Object.prototype.hasOwnProperty.call(d.removed, id);
   const isChanged = d.changed && Object.prototype.hasOwnProperty.call(d.changed, id);
+
+  // Check if this element has geometry changes
+  const t = secType(section);
+  const geomKey = t === 'nodes' ? 'nodes' : t === 'links' ? 'links' : t === 'subs' ? 'subs' : null;
+  const hasGeomChange = geomKey && geometry_changes && (geometry_changes[geomKey] || []).includes(id);
 
   let changeType = 'Unchanged';
 
@@ -684,6 +695,7 @@ function generatePopupContent(section, id, expectedState) {
   else if (isAdded) changeType = 'Added';
   else if (isRemoved) changeType = 'Removed';
   else if (isChanged) changeType = 'Changed';
+  else if (hasGeomChange) changeType = 'Changed';
 
   const renameTo = renames?.[section]?.[id];
   let html = `<div style="font-weight:700;font-size:14px;border-bottom:1px solid #e5e7eb;padding-bottom:6px;margin-bottom:8px;">${escapeHtml(section)}: ${escapeHtml(id)}</div>`;
@@ -697,9 +709,9 @@ function generatePopupContent(section, id, expectedState) {
     const hdrs = relabelHeaders(section, headers?.[section] || []);
 
     // Handle both array (old style) and object (new style) formats
-    const changedObj = d.changed[id];
-    const oldArr = Array.isArray(changedObj) ? changedObj[0] : (changedObj?.values?.[0] || []);
-    const newArr = Array.isArray(changedObj) ? changedObj[1] : (changedObj?.values?.[1] || []);
+    const changedObj = d.changed?.[id];
+    const oldArr = changedObj ? (Array.isArray(changedObj) ? changedObj[0] : (changedObj?.values?.[0] || [])) : [];
+    const newArr = changedObj ? (Array.isArray(changedObj) ? changedObj[1] : (changedObj?.values?.[1] || [])) : [];
 
     const maxLen = Math.max(oldArr.length, newArr.length);
     let changesHtml = '<ul style="margin:0;padding-left:14px;font-size:12px;">';
@@ -715,7 +727,12 @@ function generatePopupContent(section, id, expectedState) {
     }
     if (changeCount > 0) {
       html += changesHtml + '</ul>';
-    } else {
+    }
+
+    // Show geometry modified note
+    if (hasGeomChange) {
+      html += '<div style="margin-top:6px;font-size:12px;color:#f59e0b;font-weight:600;">📐 Geometry Modified</div>';
+    } else if (changeCount === 0) {
       html += '<div style="font-size:12px;color:#6b7280;">No parameter changes found.</div>';
     }
   }

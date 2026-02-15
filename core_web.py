@@ -64,7 +64,7 @@ SECTION_HEADERS = {
     "TEMPERATURE": [
         "Keyword",    # TIMESERIES / FILE / WINDSPEED / SNOWMELT / ADC
         "Arg1", "Arg2", "Arg3", "Arg4", "Arg5", "Arg6",
-        "Arg7", "Arg8", "Arg9", "Arg10", "Arg11", "Arg12"
+        "Arg7", "Arg8", "Arg9", "Arg10", "Arg11", "Arg12", "Arg13"
     ],
 
     "ADJUSTMENTS": [
@@ -1930,6 +1930,58 @@ def run_compare(file1_bytes, file2_bytes, tolerances_py=None, progress_callback=
             if sec in headers and "New Name" not in headers[sec]:
                 headers[sec].insert(1, "New Name")
 
+    # 5.5 Detect Geometry-Only Changes
+    #     Compare g1 vs g2 for elements present in both files.
+    #     Only flag IDs not already captured as added/removed.
+    geometry_changes = {"nodes": [], "links": [], "subs": []}
+
+    # Collect all added/removed IDs to skip
+    all_added_nodes = set()
+    all_removed_nodes = set()
+    all_added_links = set()
+    all_removed_links = set()
+    all_added_subs = set()
+    all_removed_subs = set()
+
+    node_sections = ["JUNCTIONS", "OUTFALLS", "DIVIDERS", "STORAGE"]
+    link_sections = ["CONDUITS", "PUMPS", "ORIFICES", "WEIRS", "OUTLETS"]
+
+    for sec in node_sections:
+        if sec in diffs:
+            all_added_nodes.update(diffs[sec].added)
+            all_removed_nodes.update(diffs[sec].removed)
+    for sec in link_sections:
+        if sec in diffs:
+            all_added_links.update(diffs[sec].added)
+            all_removed_links.update(diffs[sec].removed)
+    if "SUBCATCHMENTS" in diffs:
+        all_added_subs.update(diffs["SUBCATCHMENTS"].added)
+        all_removed_subs.update(diffs["SUBCATCHMENTS"].removed)
+
+    # Nodes: compare coordinates
+    common_nodes = set(g1.nodes.keys()) & set(g2.nodes.keys()) - all_added_nodes - all_removed_nodes
+    for nid in common_nodes:
+        xy1 = g1.nodes[nid]
+        xy2 = g2.nodes[nid]
+        if xy1 != xy2:
+            geometry_changes["nodes"].append(nid)
+
+    # Links: compare vertex lists
+    common_links = set(g1.links.keys()) & set(g2.links.keys()) - all_added_links - all_removed_links
+    for lid in common_links:
+        v1 = g1.links[lid]
+        v2 = g2.links[lid]
+        if v1 != v2:
+            geometry_changes["links"].append(lid)
+
+    # Subcatchments: compare polygon rings
+    common_subs = set(g1.subpolys.keys()) & set(g2.subpolys.keys()) - all_added_subs - all_removed_subs
+    for sid in common_subs:
+        p1 = g1.subpolys[sid]
+        p2 = g2.subpolys[sid]
+        if p1 != p2:
+            geometry_changes["subs"].append(sid)
+
     # 6. Build Output JSON
     if progress_callback: progress_callback(95, "Building output...")
 
@@ -2047,7 +2099,8 @@ def run_compare(file1_bytes, file2_bytes, tolerances_py=None, progress_callback=
         "sections2": pr2.sections,
         "hydrographs": hydrographs,
         "tolerances": tolerances,
-        "warnings": warnings
+        "warnings": warnings,
+        "geometry_changes": geometry_changes
     }
     return json.dumps(out)
 
