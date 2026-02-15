@@ -452,13 +452,7 @@ SECTION_HEADERS = {
         "FileName"
     ],
 
-    "PATTERNS": [
-        "PatternID",
-        "Type",         # MONTHLY/DAILY/HOURLY/WEEKEND
-        "Factor1", "Factor2", "Factor3", "Factor4",
-        "Factor5", "Factor6", "Factor7", "Factor8",
-        "Factor9", "Factor10", "Factor11", "Factor12"
-    ],
+
 
     # --- Controls, Tags, Map / geometry -------------------------------------
     "CONTROLS": [
@@ -558,6 +552,7 @@ def _parse_inp_iter(lines) -> INPParseResult:
     # temp_points: Dict[str, Dict[str, List]] (Section -> ID -> List[(x,y)])
     temp_curves: Dict[str, Dict] = {} 
     temp_points: Dict[str, Dict[str, List]] = defaultdict(lambda: defaultdict(list))
+    temp_patterns: Dict[str, Dict] = {} # Accumulator for Patterns: ID -> {type: "", values: []}
     temp_hydro_gages: Dict[str, str] = {}
 
     current = None  # The current section being parsed (e.g., "JUNCTIONS")
@@ -669,6 +664,34 @@ def _parse_inp_iter(lines) -> INPParseResult:
                     'Hydrograph', 'Month', 'Response', 'R', 'T', 'K', 'Dmax', 'Drecov', 'Dinit', 'RainGage'
                 ]
             continue
+
+        # [PATTERNS] - Aggregate multi-line values
+        if current == 'PATTERNS':
+             # Tokens: Name Type [Factors...] OR Name [Factors...]
+             if len(tokens) < 2:
+                 continue
+             
+             pid = tokens[0]
+             
+             # Initialize accumulator
+             if pid not in temp_patterns:
+                 temp_patterns[pid] = {"type": "", "values": []}
+             
+             # Check if second token is a Type keyword
+             # Standard Types: MONTHLY, DAILY, HOURLY, WEEKEND
+             potential_type = tokens[1].upper()
+             known_types = {"MONTHLY", "DAILY", "HOURLY", "WEEKEND"}
+             
+             vals_start_idx = 1
+             if potential_type in known_types:
+                 temp_patterns[pid]["type"] = potential_type
+                 vals_start_idx = 2
+             
+             # Collect all remaining tokens as values
+             for v in tokens[vals_start_idx:]:
+                 temp_patterns[pid]["values"].append(v)
+             
+             continue
 
         # [CURVES] section - Aggregate points
         if current == 'CURVES':
@@ -783,6 +806,17 @@ def _parse_inp_iter(lines) -> INPParseResult:
                 gage = gages.get(hid, "")
                 values.append(gage)
     
+    # Finalize PATTERNS: Convert temp accumulators to proper section entries
+    if temp_patterns:
+        # Ensure PATTERNS section exists
+        if "PATTERNS" not in sections:
+            sections["PATTERNS"] = {}
+            
+        for pid, pdata in temp_patterns.items():
+            # Entry format: [Type, JSON_List]
+            j_vals = json.dumps(pdata["values"])
+            sections["PATTERNS"][pid] = [pdata["type"], j_vals]
+
     # Post-process INFILTRATION based on OPTIONS
     # Default is Horton (matches SECTION_HEADERS default).
     # If Options -> INFILTRATION is GREEN_AMPT, switch headers and slice data.

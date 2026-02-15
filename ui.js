@@ -372,9 +372,9 @@ export function openDetail(section, id) {
     // Meta info
     let metaHTML = ``;
     if (c1.type !== c2.type && c1.type !== "—" && c2.type !== "—") {
-      metaHTML += `<div><strong>Type:</strong> <span style="text-decoration:line-through;opacity:0.6">${escapeHtml(c1.type)}</span> → <span style="color:var(--changed)">${escapeHtml(c2.type)}</span></div>`;
+      metaHTML += `<div style="margin-top:8px"><strong>Type:</strong> <span style="text-decoration:line-through;opacity:0.6">${escapeHtml(c1.type)}</span> → <span style="color:var(--changed)">${escapeHtml(c2.type)}</span></div>`;
     } else {
-      metaHTML += `<div><strong>Type:</strong> ${escapeHtml(c2.type !== "—" ? c2.type : c1.type)}</div>`;
+      metaHTML += `<div style="margin-top:8px"><strong>Type:</strong> ${escapeHtml(c2.type !== "—" ? c2.type : c1.type)}</div>`;
     }
 
     // Status Badge
@@ -450,6 +450,129 @@ export function openDetail(section, id) {
 
     grid.appendChild(tbl);
     onlyChangedBox.onchange = () => openDetail(section, id);
+
+    document.getElementById('modalBackdrop').classList.add('open');
+    document.getElementById('modalBackdrop').style.display = 'flex';
+    return;
+  }
+
+  // --- PATTERNS ---
+  // --- PATTERNS ---
+  if (section === "PATTERNS") {
+    grid.innerHTML = '';
+    grid.style.display = 'block';
+
+    const d = diffs.PATTERNS;
+    let oldData = null;
+    let newData = null;
+
+    // Find the data
+    if (d.added && d.added[id]) {
+      newData = d.added[id];
+    } else if (d.removed && d.removed[id]) {
+      oldData = d.removed[id];
+    } else if (d.changed && d.changed[id]) {
+      const cObj = d.changed[id];
+      // Changed is usually [[Type, OldJSON], [Type, NewJSON]]
+      oldData = Array.isArray(cObj) ? cObj[0] : (cObj?.values?.[0] || []);
+      newData = Array.isArray(cObj) ? cObj[1] : (cObj?.values?.[1] || []);
+    }
+
+    // Helper: { type, values[] }
+    const parsePattern = (arr) => {
+      if (!arr || arr.length < 2) return { type: "—", values: [] };
+      try { return { type: arr[0], values: JSON.parse(arr[1]) }; }
+      catch (e) { return { type: arr[0], values: [] }; }
+    }
+
+    const p1 = parsePattern(oldData);
+    const p2 = parsePattern(newData);
+
+    // Meta
+    let metaHTML = ``;
+    if (p1.type !== p2.type && p1.type !== "—" && p2.type !== "—") {
+      metaHTML += `<div style="margin-top:8px"><strong>Type:</strong> <span style="text-decoration:line-through;opacity:0.6">${escapeHtml(p1.type)}</span> → <span style="color:var(--changed)">${escapeHtml(p2.type)}</span></div>`;
+    } else {
+      metaHTML += `<div style="margin-top:8px"><strong>Type:</strong> ${escapeHtml(p2.type !== "—" ? p2.type : p1.type)}</div>`;
+    }
+
+    let badge = 'Changed';
+    if (!oldData) badge = 'Added';
+    if (!newData) badge = 'Removed';
+    metaEl.innerHTML = `<span class="badge ${badge.toLowerCase()}">${badge}</span>` + metaHTML;
+
+    // Table
+    const len = Math.max(p1.values.length, p2.values.length);
+    const type = p2.type !== "—" ? p2.type : p1.type;
+
+    // Generate labels based on type
+    const getLabel = (i) => {
+      if (type === "MONTHLY") {
+        const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+        return months[i] || `M${i + 1}`;
+      }
+      if (type === "DAILY") {
+        const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+        return days[i] || `D${i + 1}`;
+      }
+      // Hourly / Weekend
+      const h = i % 24;
+      return `${h}:00`;
+    };
+
+    const tbl = document.createElement("table");
+    tbl.className = "data-table";
+    tbl.style.width = "100%";
+    tbl.innerHTML = `
+      <thead>
+        <tr>
+          <th style="width:80px">Time/Cat</th>
+          <th style="text-align:left;">Old Factor</th>
+          <th style="text-align:left;">New Factor</th>
+          <th style="text-align:left;">Diff</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    `;
+    const tbody = tbl.querySelector("tbody");
+
+    for (let i = 0; i < len; i++) {
+      const v1 = p1.values[i];
+      const v2 = p2.values[i];
+
+      const n1 = parseFloat(v1);
+      const n2 = parseFloat(v2);
+
+      const isNum = !isNaN(n1) && !isNaN(n2);
+      const diff = isNum ? n2 - n1 : null;
+      const isDiff = v1 !== v2;
+
+      if (onlyChangedBox.checked && !isDiff) continue;
+
+      const row = document.createElement("tr");
+
+      let cell1 = `<td>${v1 !== undefined ? v1 : ""}</td>`;
+      let cell2 = `<td>${v2 !== undefined ? v2 : ""}</td>`;
+      let cellDiff = `<td></td>`;
+
+      if (isDiff) {
+        cell1 = `<td style="color:var(--removed); text-decoration:line-through; opacity:0.7">${v1 !== undefined ? v1 : ""}</td>`;
+        cell2 = `<td style="color:var(--changed); font-weight:600;">${v2 !== undefined ? v2 : ""}</td>`;
+        if (isNum && diff !== 0) {
+          const color = diff > 0 ? "var(--added)" : "var(--removed)";
+          cellDiff = `<td style="color:${color}; font-size:0.9em;">${diff > 0 ? "+" : ""}${diff.toFixed(3)}</td>`;
+        }
+      } else if (!v1 && v2) {
+        cell2 = `<td style="color:var(--added);">${v2}</td>`;
+      } else if (v1 && !v2) {
+        cell1 = `<td style="color:var(--removed);">${v1}</td>`;
+      }
+
+      row.innerHTML = `<td><strong>${getLabel(i)}</strong></td>${cell1}${cell2}${cellDiff}`;
+      tbody.appendChild(row);
+    }
+
+    grid.appendChild(tbl);
 
     document.getElementById('modalBackdrop').classList.add('open');
     document.getElementById('modalBackdrop').style.display = 'flex';
