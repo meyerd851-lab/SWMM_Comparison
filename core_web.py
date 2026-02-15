@@ -554,6 +554,7 @@ def _parse_inp_iter(lines) -> INPParseResult:
     temp_points: Dict[str, Dict[str, List]] = defaultdict(lambda: defaultdict(list))
     temp_patterns: Dict[str, Dict] = {} # Accumulator for Patterns: ID -> {type: "", values: []}
     temp_hydro_gages: Dict[str, str] = {}
+    temp_timeseries: Dict[str, Dict] = {} # Accumulator for TimeSeries: ID -> {type: "Inline"|"External", file: "", values: []}
 
     current = None  # The current section being parsed (e.g., "JUNCTIONS")
     current_control_rule = None
@@ -693,6 +694,35 @@ def _parse_inp_iter(lines) -> INPParseResult:
              
              continue
 
+        # [TIMESERIES] - Aggregate multi-line values
+        if current == 'TIMESERIES':
+             # Tokens: Name [Date] [Time] [Value]
+             # OR: Name "FILE" "filename"
+             if len(tokens) < 2:
+                 continue
+             
+             ts_id = tokens[0]
+             
+             if ts_id not in temp_timeseries:
+                 temp_timeseries[ts_id] = {"type": "Inline", "file": "", "values": []}
+
+             # Check for FILE keyword
+             if len(tokens) >= 3 and tokens[1].upper() == "FILE":
+                 temp_timeseries[ts_id]["type"] = "External"
+                 temp_timeseries[ts_id]["file"] = " ".join(tokens[2:]) # Handle filenames with spaces?
+             else:
+                 # Inline data: Date Time Value (swmm 5.1 manual p. 308)
+                 # Format: Name Date Time Value
+                 # Or: Name Time Value (Date is optional or inherited? Manual says "Date" "Time" "Value")
+                 # Actually manual says:
+                 # Name Date Time Value
+                 # Name Time Value
+                 # We just collect the tokens after Name
+                 vals = tokens[1:]
+                 temp_timeseries[ts_id]["values"].append(vals)
+
+             continue
+
         # [CURVES] section - Aggregate points
         if current == 'CURVES':
              # Tokens: Name [Type] X Y
@@ -816,6 +846,20 @@ def _parse_inp_iter(lines) -> INPParseResult:
             # Entry format: [Type, JSON_List]
             j_vals = json.dumps(pdata["values"])
             sections["PATTERNS"][pid] = [pdata["type"], j_vals]
+
+    # Finalize TIMESERIES: Convert temp accumulators to proper section entries
+    if temp_timeseries:
+        if "TIMESERIES" not in sections:
+            sections["TIMESERIES"] = {}
+            
+        for tid, tdata in temp_timeseries.items():
+            if tdata["type"] == "External":
+                # Entry: ["External", Filename]
+                sections["TIMESERIES"][tid] = ["External", tdata["file"]]
+            else:
+                # Entry: ["Inline", JSON_List_of_Rows]
+                j_vals = json.dumps(tdata["values"])
+                sections["TIMESERIES"][tid] = ["Inline", j_vals]
 
     # Post-process INFILTRATION based on OPTIONS
     # Default is Horton (matches SECTION_HEADERS default).

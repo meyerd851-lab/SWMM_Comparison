@@ -43,14 +43,14 @@ export function groupHydroSummary(d) {
 // --- SECTION GROUPING CONFIGURATION ---
 const SECTION_GROUPS = {
   Nodes: [
-    "DWF", "INFLOWS", "JUNCTIONS", "OUTFALLS", "RDII", "STORAGE", "DIVIDERS", "TREATMENT", "UNITHYD", "HYDROGRAPHS", "HYDROGRAPH_RAINGAGES"
+    "DWF", "INFLOWS", "JUNCTIONS", "OUTFALLS", "RDII", "STORAGE", "DIVIDERS", "TREATMENT", "UNITHYD", "HYDROGRAPHS", "HYDROGRAPH_RAINGAGES", "COORDINATES"
   ],
   Links: [
-    "CONDUITS", "PUMPS", "ORIFICES", "WEIRS", "OUTLETS", "XSECTIONS", "TRANSECTS", "STREETS", "INLETS", "INLET_USAGE", "LOSSES"
+    "CONDUITS", "PUMPS", "ORIFICES", "WEIRS", "OUTLETS", "XSECTIONS", "TRANSECTS", "STREETS", "INLETS", "INLET_USAGE", "LOSSES", "VERTICES"
   ],
   Subcatchments: [
     "SUBCATCHMENTS", "POLLUTANTS", "LANDUSES", "COVERAGES", "BUILDUP", "WASHOFF", "LOADINGS",
-    "GWF", "GROUNDWATER", "INFILTRATION", "LID_CONTROLS", "LID_USAGE", "SUBAREAS"
+    "GWF", "GROUNDWATER", "INFILTRATION", "LID_CONTROLS", "LID_USAGE", "SUBAREAS", "POLYGONS"
   ]
 };
 
@@ -217,6 +217,109 @@ export function renderTableFor(sec) {
   // Reset sort if section changed
   if (currentSort.sec !== sec) {
     currentSort = { sec: sec, col: 0, dir: 1 };
+  }
+
+  // --- TIMESERIES ---
+  if (sec === "TIMESERIES") {
+    const hdrs = ["Series", "Type", "Data", "Change"];
+    let thead = `<thead><tr><th style="width:40px"></th>`;
+    for (const h of hdrs) thead += `<th>${escapeHtml(h)}</th>`;
+    thead += `</tr></thead>`;
+
+    const fAdded = document.getElementById('fAdded').checked;
+    const fRemoved = document.getElementById('fRemoved').checked;
+    const fChanged = document.getElementById('fChanged').checked;
+
+    const rows = [];
+    const processEntry = (type, id, values) => {
+      // values = [Type, Data]
+      const tType = values[0] || "";
+      const dataRaw = values[1] || "";
+      let display = dataRaw;
+
+      if (tType === "Inline") {
+        try {
+          const len = JSON.parse(dataRaw).length;
+          display = `${len} points`;
+        } catch (e) { display = "Invalid Data"; }
+      } else if (tType === "External") {
+        display = dataRaw; // Filename
+      }
+
+      rows.push({ id, type, tType, display });
+    };
+
+    for (const [id, vals] of Object.entries(d.added || {})) processEntry('Added', id, vals);
+    for (const [id, vals] of Object.entries(d.removed || {})) processEntry('Removed', id, vals);
+    for (const [id, changeObj] of Object.entries(d.changed || {})) {
+      const pair = (changeObj && changeObj.values) ? changeObj.values : changeObj;
+      if (!pair || pair.length < 2) continue;
+
+      const oldVals = pair[0] || [];
+      const newVals = pair[1] || [];
+
+      const tType = newVals[0] || oldVals[0] || "";
+      const dataRaw = newVals[1] || oldVals[1] || "";
+      let display = dataRaw;
+
+      if (tType === "Inline") {
+        try {
+          const len = JSON.parse(dataRaw).length;
+          display = `${len} points`;
+        } catch (e) { }
+      }
+
+      rows.push({ id, type: 'Changed', tType, display });
+    }
+
+    // Filter & Sort
+    const filtered = rows.filter(r => {
+      const changeText = r.type.toLowerCase();
+      const matchesFilter = (fAdded && changeText.includes('added')) || (fRemoved && changeText.includes('removed')) || (fChanged && changeText.includes('changed'));
+      const matchesSearch = !q || (`${r.id} ${r.type}`).toLowerCase().includes(q);
+      return matchesFilter && matchesSearch;
+    });
+    filtered.sort((a, b) => a.id.localeCompare(b.id));
+
+    const body = filtered.map(r => {
+      const badge = r.type.toLowerCase();
+      return `
+        <tr data-id="${escapeHtml(r.id)}">
+            <td><button class="icon-btn btn-details" style="padding:4px; width:24px; height:24px;" title="Open Details">
+             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
+            </button></td>
+            <td>${escapeHtml(r.id)}</td>
+            <td>${escapeHtml(r.tType)}</td>
+            <td>${escapeHtml(r.display)}</td>
+            <td><span class="badge ${badge}">${r.type}</span></td>
+        </tr>`;
+    }).join("");
+
+    table.innerHTML = thead + `<tbody>${body || `<tr><td colspan="${hdrs.length + 1}" style="color:var(--text-tertiary);font-style:italic;padding:12px;">No rows match.</td></tr>`}</tbody>`;
+
+    // Attach listeners
+    table.querySelectorAll("tbody tr").forEach(tr => {
+      const id = tr.getAttribute("data-id");
+      if (id) {
+        tr.onclick = (e) => {
+          document.querySelectorAll('.sec-item').forEach(n => n.classList.remove('active'));
+          tr.classList.add('active');
+        };
+        tr.ondblclick = (e) => {
+          e.stopPropagation();
+          openDetail(sec, id);
+        };
+        const btn = tr.querySelector(".btn-details");
+        if (btn) {
+          btn.onclick = (e) => {
+            e.stopPropagation();
+            openDetail(sec, id);
+          };
+        }
+      }
+    });
+
+    return;
   }
 
   // --- PATTERNS ---

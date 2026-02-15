@@ -576,6 +576,137 @@ export function openDetail(section, id) {
 
     document.getElementById('modalBackdrop').classList.add('open');
     document.getElementById('modalBackdrop').style.display = 'flex';
+    document.getElementById('modalBackdrop').style.display = 'flex';
+    return;
+  }
+
+  // --- TIMESERIES ---
+  if (section === "TIMESERIES") {
+    grid.innerHTML = '';
+    grid.style.display = 'block';
+
+    const d = diffs.TIMESERIES;
+    let oldData = null, newData = null;
+
+    if (d.added && d.added[id]) newData = d.added[id];
+    else if (d.removed && d.removed[id]) oldData = d.removed[id];
+    else if (d.changed && d.changed[id]) {
+      const cObj = d.changed[id];
+      // Check if wrapped in {values: ...} or direct array
+      const pair = (cObj && cObj.values) ? cObj.values : cObj;
+      oldData = pair[0];
+      newData = pair[1];
+    }
+
+    // Helper to parse [Type, Data]
+    const parseTS = (arr) => {
+      if (!arr || arr.length < 2) return { type: "—", data: [] };
+      if (arr[0] === "External") return { type: "External", file: arr[1], data: [] };
+      try {
+        return { type: "Inline", file: "", data: JSON.parse(arr[1]) };
+      } catch (e) { return { type: "Inline", file: "", data: [] }; }
+    };
+
+    const t1 = parseTS(oldData);
+    const t2 = parseTS(newData);
+
+    // Meta Info
+    let metaHTML = ``;
+    if (t1.type !== t2.type && t1.type !== "—" && t2.type !== "—") {
+      metaHTML += `<div style="margin-top:8px"><strong>Type:</strong> <span style="text-decoration:line-through;opacity:0.6">${escapeHtml(t1.type)}</span> → <span style="color:var(--changed)">${escapeHtml(t2.type)}</span></div>`;
+    } else {
+      metaHTML += `<div style="margin-top:8px"><strong>Type:</strong> ${escapeHtml(t2.type !== "—" ? t2.type : t1.type)}</div>`;
+    }
+
+    if (t1.file || t2.file) {
+      if (t1.file && t2.file && t1.file !== t2.file) {
+        metaHTML += `<div><strong>File:</strong> <span style="text-decoration:line-through;opacity:0.6">${escapeHtml(t1.file)}</span> → <span style="color:var(--changed)">${escapeHtml(t2.file)}</span></div>`;
+      } else {
+        metaHTML += `<div><strong>File:</strong> ${escapeHtml(t2.file || t1.file)}</div>`;
+      }
+    }
+
+    let badge = 'Changed';
+    if (!oldData) badge = 'Added';
+    if (!newData) badge = 'Removed';
+    metaEl.innerHTML = `<span class="badge ${badge.toLowerCase()}">${badge}</span>` + metaHTML;
+
+    // If External, we stop here (no table)
+    if (t2.type === "External" || (t1.type === "External" && !t2.type)) {
+      grid.appendChild(document.createElement("div"));
+      document.getElementById('modalBackdrop').classList.add('open');
+      document.getElementById('modalBackdrop').style.display = 'flex';
+      return;
+    }
+
+    // Render Table for Inline
+    const len = Math.max(t1.data.length, t2.data.length);
+    const tbl = document.createElement("table");
+    tbl.className = "data-table";
+    tbl.style.width = "100%";
+
+    tbl.innerHTML = `
+      <thead>
+        <tr>
+          <th style="width:90px">Date</th>
+          <th style="width:80px">Time</th>
+          <th style="text-align:left;">Old Value</th>
+          <th style="text-align:left;">New Value</th>
+          <th style="text-align:left;">Diff</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    `;
+    const tbody = tbl.querySelector("tbody");
+
+    for (let i = 0; i < len; i++) {
+      const r1 = t1.data[i] || [];
+      const r2 = t2.data[i] || [];
+
+      const getDate = (r) => r.length === 3 ? r[0] : "";
+      const getTime = (r) => r.length === 3 ? r[1] : (r.length === 2 ? r[0] : "");
+      const getVal = (r) => r.length === 3 ? r[2] : (r.length === 2 ? r[1] : "");
+
+      const d1 = getDate(r1), time1 = getTime(r1), v1 = getVal(r1);
+      const d2 = getDate(r2), time2 = getTime(r2), v2 = getVal(r2);
+
+      const dateDisplay = d2 || d1;
+      const timeDisplay = time2 || time1;
+
+      const n1 = parseFloat(v1);
+      const n2 = parseFloat(v2);
+      const isNum = !isNaN(n1) && !isNaN(n2);
+      const diff = isNum ? n2 - n1 : null;
+      const isDiff = v1 !== v2;
+
+      if (onlyChangedBox.checked && !isDiff) continue;
+
+      const row = document.createElement("tr");
+
+      let cell1 = `<td>${v1 !== undefined && v1 !== "" ? v1 : ""}</td>`;
+      let cell2 = `<td>${v2 !== undefined && v2 !== "" ? v2 : ""}</td>`;
+      let cellDiff = `<td></td>`;
+
+      if (isDiff) {
+        cell1 = `<td style="color:var(--removed); text-decoration:line-through; opacity:0.7">${v1}</td>`;
+        cell2 = `<td style="color:var(--changed); font-weight:600;">${v2}</td>`;
+        if (isNum && diff !== 0) {
+          const color = diff > 0 ? "var(--added)" : "var(--removed)";
+          cellDiff = `<td style="color:${color}; font-size:0.9em;">${diff > 0 ? "+" : ""}${diff.toFixed(3)}</td>`;
+        }
+      } else if (!v1 && v2) {
+        cell2 = `<td style="color:var(--added);">${v2}</td>`;
+      } else if (v1 && !v2) {
+        cell1 = `<td style="color:var(--removed);">${v1}</td>`;
+      }
+
+      row.innerHTML = `<td>${dateDisplay}</td><td><strong>${timeDisplay}</strong></td>${cell1}${cell2}${cellDiff}`;
+      tbody.appendChild(row);
+    }
+
+    grid.appendChild(tbl);
+    document.getElementById('modalBackdrop').classList.add('open');
+    document.getElementById('modalBackdrop').style.display = 'flex';
     return;
   }
 
