@@ -754,7 +754,7 @@ def _parse_inp_iter(lines) -> INPParseResult:
 class SWMMGeometry:
     nodes: Dict[str, Tuple[float, float]]          # node -> (x, y)
     links: Dict[str, List[Tuple[float, float]]]    # link -> [(x, y), ...]
-    subpolys: Dict[str, List[Tuple[float, float]]] # sub -> [(x, y), ...]
+    subpolys: Dict[str, List[List[Tuple[float, float]]]] # sub -> List of rings: [[(x,y)...], [(x,y)...]]
 
 def _parse_geom_iter(lines) -> SWMMGeometry:
     """
@@ -766,7 +766,7 @@ def _parse_geom_iter(lines) -> SWMMGeometry:
     nodes_raw: Dict[str, Tuple[float, float]] = {}
     vertices_raw: Dict[str, List[Tuple[float, float]]] = defaultdict(list)
     links_endpoints: Dict[str, Tuple[str, str]] = {}
-    subpolys_raw: Dict[str, List[Tuple[float, float]]] = {}
+    subpolys_raw: Dict[str, List[List[Tuple[float, float]]]] = {}
 
     section = None
     for raw in lines:
@@ -801,7 +801,24 @@ def _parse_geom_iter(lines) -> SWMMGeometry:
         elif section == "[POLYGONS]" and len(parts) >= 3:
             sub = parts[0]
             x, y = float(parts[1]), float(parts[2])
-            subpolys_raw.setdefault(sub, []).append((x, y))
+            
+            # Initialize if new sub
+            if sub not in subpolys_raw:
+                subpolys_raw[sub] = [[]] # Start with first ring
+
+            current_ring = subpolys_raw[sub][-1]
+            
+            # Check if we should start a new ring
+            # If current ring is "closed" (has >= 3 points and last == first), 
+            # and we are adding a NEW point, does that new point start a new ring?
+            # Actually, standard is: Point, Point, Point... Point (==First). 
+            # Next line is Start of next ring.
+            if len(current_ring) >= 3 and current_ring[0] == current_ring[-1]:
+                # Current ring is closed. Start a new one.
+                current_ring = []
+                subpolys_raw[sub].append(current_ring)
+            
+            current_ring.append((x, y))
 
     # Assemble full link coordinates (Start Node + Vertices + End Node)
     links: Dict[str, List[Tuple[float, float]]] = {}
@@ -845,17 +862,44 @@ def _polyline_length_m(coords: List[Tuple[float, float]]) -> float:
         return 0.0
     return sum(_dist_m_xy(a, b) for a, b in zip(coords[:-1], coords[1:]))
 
-def _centroid_xy(coords: List[Tuple[float, float]]) -> Optional[Tuple[float, float]]:
+def _centroid_xy(coords: Any) -> Optional[Tuple[float, float]]:
+    # coords can be List[(x,y)] (single ring -> old logic, or just first ring?)
+    # or List[List[(x,y)]] (multi ring)
+    # We'll flatten to get a rough centroid of all points.
     if not coords:
         return None
-    x = sum(p[0] for p in coords) / len(coords)
-    y = sum(p[1] for p in coords) / len(coords)
+    
+    # Check if it's list of lists (MultiPolygon)
+    # If first element is a list, flatten
+    points = []
+    if isinstance(coords[0], list):
+        for ring in coords:
+            points.extend(ring)
+    else:
+        points = coords
+        
+    if not points:
+        return None
+        
+    x = sum(p[0] for p in points) / len(points)
+    y = sum(p[1] for p in points) / len(points)
     return (x, y)
 
-def _bbox_area_m2(coords: List[Tuple[float, float]]) -> float:
+def _bbox_area_m2(coords: Any) -> float:
     if not coords:
         return 0.0
-    xs = [p[0] for p in coords]; ys = [p[1] for p in coords]
+        
+    points = []
+    if isinstance(coords[0], list):
+        for ring in coords:
+            points.extend(ring)
+    else:
+        points = coords
+        
+    if not points: 
+        return 0.0
+
+    xs = [p[0] for p in points]; ys = [p[1] for p in points]
     w_ft = max(xs) - min(xs)
     h_ft = max(ys) - min(ys)
     return (w_ft * _FEET_TO_M) * (h_ft * _FEET_TO_M)
@@ -1923,11 +1967,18 @@ def generate_shapefiles_zip(diffs_json_str: str, geometry_json_str: str, crs_id:
                         # coords is [(x, y), ...]
                         w.line([coords])
                     elif shape_type == shapefile.POLYGON:
-                        # coords is [(x, y), ...]
-                        # Ensure closed polygon
-                        if coords[0] != coords[-1]:
-                            coords.append(coords[0])
-                        w.poly([coords])
+                        # coords is List[List[(x,y)]] (List of rings)
+                        # PyShp w.poly expects a list of parts (rings).
+                        # Ensure each ring is closed
+                        clean_rings = []
+                        for ring in coords:
+                            if not ring: continue
+                            if ring[0] != ring[-1]:
+                                ring.append(ring[0])
+                            clean_rings.append(ring)
+                        
+                        if clean_rings:
+                            w.poly(clean_rings)
                     
                     # Prepare record values
                     # Initialize with empty strings/zeros

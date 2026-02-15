@@ -111,20 +111,65 @@ function midOfLine(coords) {
 
 function centroidOfPoly(coords) {
   if (!coords || coords.length === 0) return null;
+  // Handle MultiPolygon (list of rings)
+  // If first item is array, it's a ring.
+  let points = [];
+  if (Array.isArray(coords[0]) && Array.isArray(coords[0][0])) {
+    // Flatten
+    coords.forEach(ring => points.push(...ring));
+  } else {
+    points = coords;
+  }
+
+  if (points.length === 0) return null;
+
   let x = 0, y = 0;
-  for (const p of coords) { x += p[0]; y += p[1]; }
-  return [x / coords.length, y / coords.length];
+  for (const p of points) { x += p[0]; y += p[1]; }
+  return [x / points.length, y / points.length];
 }
 
 function isPointInPoly(pt, poly) {
-  let x = pt.lat, y = pt.lng;
+  // poly can be LatLng[] (single ring) or LatLng[][] (multi ring / holes)
+  // L.Polygon.getLatLngs() usually returns:
+  // - [LatLng, LatLng...] for simple polygon (Passed as [pts] to constructor)
+  // - [[LatLng...], [LatLng...]] for multipolygon/holes
+  // BUT Leaflet normalizes simple polygons to [ [LatLng...] ] sometimes?
+  // Let's iterate all rings.
+
+  let rings = [];
+  if (poly.length > 0 && Array.isArray(poly[0])) {
+    // It is likely a list of rings (or points? LatLng is object, not array).
+    // LatLng is {lat, lng}, not array.
+    // So if poly[0] is array, it's list of rings.
+    // If poly[0] is LatLng (object), it's single ring (Legacy Leaflet structure).
+    // Wait, checks:
+    if ('lat' in poly[0]) {
+      rings = [poly];
+    } else {
+      rings = poly;
+    }
+  } else {
+    return false;
+  }
+
   let inside = false;
-  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
-    let xi = poly[i].lat, yi = poly[i].lng;
-    let xj = poly[j].lat, yj = poly[j].lng;
-    let intersect = ((yi > y) != (yj > y)) &&
-      (x < (xj - xi) * (y - yi) / (yj - yi) + xi);
-    if (intersect) inside = !inside;
+
+  // Ray casting algorithm check
+  // For MultiPolygon, odd total crossings = inside? 
+  // Or Check if inside Any outer ring and outside Any hole?
+  // SWMM "Segmented Polygons" are usually disjoint islands (MultiPolygon), not holes.
+  // So standard even-odd rule for all rings effectively unions them if they are disjoint.
+
+  let x = pt.lat, y = pt.lng;
+
+  for (const ring of rings) {
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+      let xi = ring[i].lat, yi = ring[i].lng;
+      let xj = ring[j].lat, yj = ring[j].lng;
+      let intersect = ((yi > y) != (yj > y)) &&
+        (x < (xj - xi) * (y - yi) / (yj - yi) + xi);
+      if (intersect) inside = !inside;
+    }
   }
   return inside;
 }
@@ -403,8 +448,11 @@ export function drawGeometry(json) {
   };
 
   const drawSub = (id, coords, color, target) => {
-    const ll = coords.map(p => xyToLatLng(p[0], p[1]));
-    const polygon = L.polygon(ll, {
+    // coords is List[List[x,y]] (MultiPolygon)
+    // Map to LatLngs
+    const latlngs = coords.map(ring => ring.map(p => xyToLatLng(p[0], p[1])));
+
+    const polygon = L.polygon(latlngs, {
       color,
       weight: 2,
       fill: true,
@@ -436,7 +484,14 @@ export function drawGeometry(json) {
     if (!g) return;
     Object.values(g).forEach(v => {
       if (Array.isArray(v) && v.length && Array.isArray(v[0])) {
-        coordsToLatLng(v).forEach(p => anyLL.push(p));
+        // Check depth: Array[Array[x,y]] (Single Ring) vs Array[Array[Array[x,y]]] (List of Rings)
+        if (Array.isArray(v[0][0])) {
+          // MultiPolygon / List of Rings
+          v.forEach(ring => coordsToLatLng(ring).forEach(p => anyLL.push(p)));
+        } else {
+          // Single Ring (Line or simple poly)
+          coordsToLatLng(v).forEach(p => anyLL.push(p));
+        }
       } else if (Array.isArray(v)) {
         anyLL.push(xyToLatLng(v[0], v[1]));
       }
@@ -513,8 +568,10 @@ export function highlightElement(section, id, shouldZoom = false, isRemoved = fa
     }).addTo(layers.select);
     if (shouldZoom) map.fitBounds(L.latLngBounds(ll), { padding: [50, 50], maxZoom: 18 });
   } else if (t === 'subs') {
-    const ll = geo.map(p => xyToLatLng(p[0], p[1]));
-    L.polygon(ll, {
+    // geo is List[List[x,y]]
+    const latlngs = geo.map(ring => ring.map(p => xyToLatLng(p[0], p[1])));
+
+    L.polygon(latlngs, {
       color: C.select,
       weight: 5,
       fill: false,
@@ -522,7 +579,13 @@ export function highlightElement(section, id, shouldZoom = false, isRemoved = fa
       pane: 'selectPane',
       renderer: selectRenderer
     }).addTo(layers.select);
-    if (shouldZoom) map.fitBounds(L.latLngBounds(ll), { padding: [50, 50], maxZoom: 18 });
+
+    if (shouldZoom) {
+      // Flatten for bounds
+      const allPts = [];
+      latlngs.forEach(r => allPts.push(...r));
+      map.fitBounds(L.latLngBounds(allPts), { padding: [50, 50], maxZoom: 18 });
+    }
   }
 }
 
@@ -681,8 +744,7 @@ function findNearbyElements(latlng) {
     }
     else if (layer instanceof L.Polygon) {
       const latlngs = layer.getLatLngs();
-      const shell = Array.isArray(latlngs[0]) ? latlngs[0] : latlngs;
-      if (isPointInPoly(latlng, shell)) {
+      if (isPointInPoly(latlng, latlngs)) {
         subs.push(layer.swmmInfo);
       }
     }
@@ -711,8 +773,9 @@ function hasHoverElement(latlng) {
     }
     else if (layer instanceof L.Polygon) {
       const latlngs = layer.getLatLngs();
-      const shell = Array.isArray(latlngs[0]) ? latlngs[0] : latlngs;
-      if (isPointInPoly(latlng, shell)) found = true;
+      // getLatLngs() returns [[LatLng...], [LatLng...]] for MultiPoly
+      // isPointInPoly now handles list of rings
+      if (isPointInPoly(latlng, latlngs)) found = true;
     }
   });
   return found;
