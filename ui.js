@@ -456,6 +456,139 @@ export function openDetail(section, id) {
     return;
   }
 
+  // --- TRANSECTS SPECIAL HANDLING ---
+  if (section === "TRANSECTS") {
+    titleEl.textContent = `TRANSECT · ${id}`;
+    grid.innerHTML = "";
+    grid.style.display = 'block';
+    grid.style.border = 'none';
+    grid.style.background = 'transparent';
+
+    const d = diffs.TRANSECTS;
+    let oldData = [], newData = [];
+
+    if (d.added && d.added[id]) newData = d.added[id];
+    else if (d.removed && d.removed[id]) oldData = d.removed[id];
+    else if (d.changed && d.changed[id]) {
+      const cObj = d.changed[id];
+      const pair = (cObj && cObj.values) ? cObj.values : cObj;
+      oldData = pair[0] || [];
+      newData = pair[1] || [];
+    }
+
+    // Helper to safe-get
+    const getData = (arr) => {
+      if (!arr || arr.length < 9) return {
+        nc: ["-", "-", "-"],
+        x1: ["-", "-", "-", "-", "-"],
+        gr: []
+      };
+      // array index map: 0-2=NC, 3-7=X1 params, 8=JSON
+      return {
+        nc: [arr[0], arr[1], arr[2]],
+        x1: [arr[3], arr[4], arr[5], arr[6], arr[7]],
+        gr: JSON.parse(arr[8] || "[]")
+      };
+    };
+
+    const d1 = getData(oldData);
+    const d2 = getData(newData);
+
+    // Render helpers
+    const renderRow = (label, v1, v2) => {
+      const isDiff = v1 !== v2 && v1 !== "-" && v2 !== "-";
+      const c1 = isDiff ? `<span style="text-decoration:line-through; opacity:0.6">${escapeHtml(v1)}</span>` : escapeHtml(v1);
+      const c2 = isDiff ? `<span style="color:var(--changed); font-weight:600;">${escapeHtml(v2)}</span>` : escapeHtml(v2);
+      return `<tr><td>${label}</td><td>${c1}</td><td>${c2}</td></tr>`;
+    };
+
+    const renderGeomRows = (g1, g2) => {
+      const len = Math.max(g1.length, g2.length);
+      let html = "";
+
+      const diff = (a, b) => Math.abs(Number(a) - Number(b)) > 0.0001;
+
+      for (let i = 0; i < len; i++) {
+        const p1 = g1[i]; // [sta, elev]
+        const p2 = g2[i];
+
+        let c1 = "", c2 = "";
+        let style = "";
+
+        if (p1 && p2) {
+          // Check station
+          const staChanged = diff(p1[0], p2[0]);
+          const elevChanged = diff(p1[1], p2[1]);
+
+          if (staChanged || elevChanged) style = "background:var(--bg-highlight);";
+
+          const fmt = (v, isChanged) => isChanged ? `<span style="color:var(--changed); font-weight:600;">${v}</span>` : v;
+          const fmtOld = (v, isChanged) => isChanged ? `<span style="text-decoration:line-through; opacity:0.6">${v}</span>` : v;
+
+          c1 = `<td>${fmtOld(p1[0], staChanged)}</td><td style="border-right:1px solid var(--border-medium)">${fmtOld(p1[1], elevChanged)}</td>`;
+          c2 = `<td>${fmt(p2[0], staChanged)}</td><td>${fmt(p2[1], elevChanged)}</td>`;
+        }
+        else if (p1 && !p2) {
+          style = "background:var(--removed-light);";
+          c1 = `<td>${p1[0]}</td><td style="border-right:1px solid var(--border-medium)">${p1[1]}</td>`;
+          c2 = `<td></td><td></td>`;
+        }
+        else if (!p1 && p2) {
+          style = "background:var(--added-light);";
+          c1 = `<td></td><td style="border-right:1px solid var(--border-medium)"></td>`;
+          c2 = `<td>${p2[0]}</td><td>${p2[1]}</td>`;
+        }
+
+        html += `<tr style="${style}">${c1}${c2}</tr>`;
+      }
+      return html;
+    };
+
+    // 1. Properties Table (Manning's N + X1)
+    const propsHTML = `
+        <div style="margin-bottom:12px; font-weight:600; color:var(--text-secondary); text-transform:uppercase; font-size:0.85em; letter-spacing:0.5px;">Transect Properties</div>
+        <table class="data-table" style="margin-bottom:24px;">
+           <thead><tr><th>Property</th><th>Old</th><th>New</th></tr></thead>
+           <tbody>
+             ${renderRow("Left Bank N", d1.nc[0], d2.nc[0])}
+             ${renderRow("Right Bank N", d1.nc[1], d2.nc[1])}
+             ${renderRow("Channel N", d1.nc[2], d2.nc[2])}
+             ${renderRow("Left Station", d1.x1[0], d2.x1[0])}
+             ${renderRow("Right Station", d1.x1[1], d2.x1[1])}
+             ${renderRow("L-Factor", d1.x1[2], d2.x1[2])}
+             ${renderRow("W-Factor", d1.x1[3], d2.x1[3])}
+             ${renderRow("E-Offset", d1.x1[4], d2.x1[4])}
+           </tbody>
+        </table>
+      `;
+
+    // 2. Geometry Table
+    const grHTML = `
+        <div style="margin-bottom:12px; font-weight:600; color:var(--text-secondary); text-transform:uppercase; font-size:0.85em; letter-spacing:0.5px;">Geometry Points</div>
+        <table class="data-table">
+          <thead>
+            <tr><th colspan="2" style="text-align:center; border-right:1px solid var(--border-medium)">Old (Sta, Elev)</th><th colspan="2" style="text-align:center;">New (Sta, Elev)</th></tr>
+            <tr><th>Sta</th><th style="border-right:1px solid var(--border-medium)">Elev</th><th>Sta</th><th>Elev</th></tr>
+          </thead>
+          <tbody>
+             ${renderGeomRows(d1.gr, d2.gr)}
+          </tbody>
+        </table>
+      `;
+
+    grid.innerHTML = propsHTML + grHTML;
+
+    // Meta badge
+    let badge = 'Changed';
+    if (!oldData.length) badge = 'Added';
+    if (!newData.length) badge = 'Removed';
+    metaEl.innerHTML = `<span class="badge ${badge.toLowerCase()}">${badge}</span>`;
+
+    document.getElementById('modalBackdrop').classList.add('open');
+    document.getElementById('modalBackdrop').style.display = 'flex';
+    return;
+  }
+
   // --- PATTERNS ---
   // --- PATTERNS ---
   if (section === "PATTERNS") {

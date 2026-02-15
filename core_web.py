@@ -288,8 +288,9 @@ SECTION_HEADERS = {
 
     "TRANSECTS": [
         "TransectID",
-        "RecordType",   # NC / X1 / GR / etc.
-        "Value1", "Value2", "Value3", "Value4", "Value5", "Value6"
+        "nLeft", "nRight", "nChan",
+        "XLeft", "XRight",
+        "Lfactor", "Wfactor", "Eoffset"
     ],
 
     "STREETS": [
@@ -314,13 +315,15 @@ SECTION_HEADERS = {
     ],
 
     "INLET_USAGE": [
+        "Conduit",
         "Inlet",
-        "NodeOrLink",
-        "Placement",    # ON_GRADE / ON_SAG / SLOPED / etc.
+        "Node",    
         "Number",
-        "CloggingFactor",
-        "LocalDepression",
-        "Qmax"
+        "%Clogged",
+        "Qmax",
+        "aLocal",
+        "wLocal",
+        "Placement"
     ],
 
     "LOSSES": [
@@ -336,14 +339,15 @@ SECTION_HEADERS = {
     "POLLUTANTS": [
         "Name",
         "Units",
-        "Crdc",         # Crain
+        "Crain",         # Crain
         "Cgw",
         "Crdii",
-        "Cinit",
         "Kdecay",
         "SnowOnly",
         "CoPollut",
-        "CoFrac"
+        "CoFrac",
+        "Cdwf",
+        "Cinit"
     ],
 
     "LANDUSES": [
@@ -376,7 +380,7 @@ SECTION_HEADERS = {
         "FuncType",     # EXPONENTIAL/EMC/RATING
         "Coeff1",
         "Coeff2",
-        "CleanEffic",
+        "SweepRemoval",
         "BMPRemoval"
     ],
 
@@ -484,7 +488,7 @@ SECTION_HEADERS = {
         "Data"
     ],
 
-    # Some project files also include [LABELS], [BACKDROP], etc.; you can add as needed:
+    # Some project files also include [LABELS], [BACKDROP], etc.;
     "LABELS": [
         "X",
         "Y",
@@ -556,6 +560,9 @@ def _parse_inp_iter(lines) -> INPParseResult:
     temp_patterns: Dict[str, Dict] = {} # Accumulator for Patterns: ID -> {type: "", values: []}
     temp_hydro_gages: Dict[str, str] = {}
     temp_timeseries: Dict[str, Dict] = {} # Accumulator for TimeSeries: ID -> {type: "Inline"|"External", file: "", values: []}
+    temp_transects: Dict[str, Dict] = {} # {TransectID: {nc: [], x1: [], gr: []}}
+    current_nc: List[str] = ["0", "0", "0"] # [Left, Right, Channel]
+    current_transect_id: str = None
 
     current = None  # The current section being parsed (e.g., "JUNCTIONS")
     current_control_rule = None
@@ -597,9 +604,63 @@ def _parse_inp_iter(lines) -> INPParseResult:
                 # Append line to the current rule's text
                 sections[current][current_control_rule][0] += "\n" + line
             
-            # If we are in CONTROLS, we consume every line (including empty ones and comments)
             # once a rule has started. If no rule started, we ignore (likely pre-header comments).
             continue
+
+        # [TRANSECTS] - HEC-2 Format (NC, X1, GR)
+        if current == 'TRANSECTS':
+             # Skip comments/blank
+             if line.startswith(";") or not line.strip():
+                 continue
+                 
+             tokens = line.strip().split()
+             if not tokens: continue
+             
+             record_type = tokens[0].upper()
+             
+             if record_type == "NC":
+                 # NC Nleft Nright Nchanl
+                 # Update global "current" NC values to be used by subsequent X1 lines
+                 if len(tokens) >= 4:
+                     current_nc = tokens[1:4]
+                 continue
+                 
+             elif record_type == "X1":
+                 # X1 Name Nsta Xleft Xright 0 0 0 Lfactor Wfactor Eoffset
+                 if len(tokens) < 2: continue
+                 
+                 tid = tokens[1]
+                 current_transect_id = tid
+                 
+                 if tid not in temp_transects:
+                     temp_transects[tid] = {
+                         "nc": list(current_nc), # Copy current NC values
+                         "x1": [],
+                         "gr": []
+                     }
+                 
+                 # Store X1 parameters (Nsta, Xleft, Xright... etc)
+                 # We assume tokens[2:] contains the params.
+                 temp_transects[tid]["x1"] = tokens[2:]
+                 continue
+                 
+             elif record_type == "GR":
+                 # GR Elev Station ...
+                 if not current_transect_id or current_transect_id not in temp_transects:
+                     continue
+                     
+                 # Parse pairs
+                 raw_vals = tokens[1:]
+                 for i in range(0, len(raw_vals), 2):
+                     if i+1 < len(raw_vals):
+                         elev = raw_vals[i]
+                         sta = raw_vals[i+1]
+                         temp_transects[current_transect_id]["gr"].append([sta, elev])
+                 continue
+                 
+             else:
+                 # Unknown or unrelated line? 
+                 continue
 
         # 2. Capture Description Comments
         #    Some sections have a description line starting with a semicolon immediately after the header.
@@ -648,9 +709,6 @@ def _parse_inp_iter(lines) -> INPParseResult:
 
         # [HYDROGRAPHS] section can have two formats
         if current == 'HYDROGRAPHS':
-            # Format 1: Mapping to a Rain Gage (e.g., "Hydro1  Gage1")
-            if len(tokens) == 2:
-                hydrograph_id, gage_name = tokens[0], tokens[1]
             # Format 1: Mapping to a Rain Gage (e.g., "Hydro1  Gage1")
             if len(tokens) == 2:
                 hydrograph_id, gage_name = tokens[0], tokens[1]
@@ -754,6 +812,21 @@ def _parse_inp_iter(lines) -> INPParseResult:
                  c_data["points"].append((x_val, y_val))
                  
              continue
+
+        # [TREATMENT] - Handle Expressions with spaces
+        if current == 'TREATMENT':
+            # Format: Node Pollutant Function
+            if len(tokens) >= 3:
+                node_id = tokens[0]
+                pollutant = tokens[1]
+                # Join everything after pollutant as the function/expression
+                expression = " ".join(tokens[2:])
+                
+                # We key by Node ID. Note: parsing allows overwriting if multiple pollutants exist for same node
+                # unless we change the key strategy. For now, matching standard column layout.
+                # Columns: [Pollutant, Expression] (Node is ID)
+                sections[current][node_id] = [pollutant, expression]
+            continue
 
         # [VERTICES] and [POLYGONS] - Aggregate points
         if current in ('VERTICES', 'POLYGONS'):
@@ -861,6 +934,36 @@ def _parse_inp_iter(lines) -> INPParseResult:
                 # Entry: ["Inline", JSON_List_of_Rows]
                 j_vals = json.dumps(tdata["values"])
                 sections["TIMESERIES"][tid] = ["Inline", j_vals]
+
+                j_vals = json.dumps(tdata["values"])
+                sections["TIMESERIES"][tid] = ["Inline", j_vals]
+
+    # Finalize TRANSECTS
+    if temp_transects:
+        if "TRANSECTS" not in sections:
+            sections["TRANSECTS"] = {}
+        
+        for tid, tdata in temp_transects.items():
+            # Entry format: [nLeft, nRight, nChan, XLeft, XRight, Lfactor, Wfactor, Eoffset, JSON_Geometry]
+            
+            nc = tdata["nc"]
+            x1 = tdata["x1"]
+            gr = tdata["gr"]
+            
+            # Extract key params for table view
+            nL, nR, nC = (nc + ["0", "0", "0"])[:3]
+            
+            # X1 indices: 0=Nsta, 1=Xleft, 2=Xright, 3,4,5=0, 6=Lfac, 7=Wfac, 8=Eoff
+            val_xL = x1[1] if len(x1) > 1 else "0"
+            val_xR = x1[2] if len(x1) > 2 else "0"
+            val_L = x1[6] if len(x1) > 6 else "0"
+            val_W = x1[7] if len(x1) > 7 else "0"
+            val_E = x1[8] if len(x1) > 8 else "0"
+            
+            gr_json = json.dumps(gr)
+            
+            row_data = [nL, nR, nC, val_xL, val_xR, val_L, val_W, val_E, gr_json]
+            sections["TRANSECTS"][tid] = row_data
 
     # Post-process INFILTRATION based on OPTIONS
     # Default is Horton (matches SECTION_HEADERS default).

@@ -219,10 +219,13 @@ export function renderTableFor(sec) {
     currentSort = { sec: sec, col: 0, dir: 1 };
   }
 
+  let rows = [];
+  let thead = "";
+
   // --- TIMESERIES ---
   if (sec === "TIMESERIES") {
     const hdrs = ["Series", "Type", "Data", "Change"];
-    let thead = `<thead><tr><th style="width:40px"></th>`;
+    thead = `<thead><tr><th style="width:40px"></th>`;
     for (const h of hdrs) thead += `<th>${escapeHtml(h)}</th>`;
     thead += `</tr></thead>`;
 
@@ -230,7 +233,7 @@ export function renderTableFor(sec) {
     const fRemoved = document.getElementById('fRemoved').checked;
     const fChanged = document.getElementById('fChanged').checked;
 
-    const rows = [];
+    rows = [];
     const processEntry = (type, id, values) => {
       // values = [Type, Data]
       const tType = values[0] || "";
@@ -258,21 +261,58 @@ export function renderTableFor(sec) {
       const oldVals = pair[0] || [];
       const newVals = pair[1] || [];
 
-      const tType = newVals[0] || oldVals[0] || "";
-      const dataRaw = newVals[1] || oldVals[1] || "";
-      let display = dataRaw;
+      const t1 = (oldVals[0] || "Inline");
+      const d1 = (oldVals[1] || "");
+      const t2 = (newVals[0] || "Inline");
+      const d2 = (newVals[1] || "");
 
-      if (tType === "Inline") {
-        try {
-          const len = JSON.parse(dataRaw).length;
-          display = `${len} points`;
-        } catch (e) { }
-      }
+      // Determine display
+      let display = "";
+      if (t2 === "Inline") {
+        try { display = `${JSON.parse(d2).length} points`; } catch (e) { display = "Invalid"; }
+      } else { display = d2; }
 
-      rows.push({ id, type: 'Changed', tType, display });
+      rows.push({ id, type: 'Changed', tType: t2, display });
     }
+  }
 
-    // Filter & Sort
+  // --- TRANSECTS ---
+  else if (sec === "TRANSECTS") {
+    // Headers must match row columns: [Details, ID, tType, Display, Badge]
+    // tType is currently unused for Transects, so we can label it "Type" or leave blank
+    const hdrs = ["Transect", "Type", "Stations", "Change"];
+    thead = `<thead><tr><th style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-tertiary); font-weight: 500;"></th>`;
+    for (const h of hdrs) thead += `<th style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-tertiary); font-weight: 500;">${escapeHtml(h)}</th>`;
+    thead += `</tr></thead>`;
+
+    rows = [];
+    const processEntry = (type, id, values) => {
+      // values = [nL, nR, nC, xL, xR, L, W, E, JSON_Geometry]
+      const grJson = values[8] || "[]";
+      let count = 0;
+      try { count = JSON.parse(grJson).length; } catch (e) { }
+      // Push empty string for tType to maintain column alignment
+      rows.push({ id, type, tType: "", display: `${count}` });
+    };
+
+    if (d.added) for (const [id, vals] of Object.entries(d.added)) processEntry('Added', id, vals);
+    if (d.removed) for (const [id, vals] of Object.entries(d.removed)) processEntry('Removed', id, vals);
+    if (d.changed) {
+      for (const [id, changeObj] of Object.entries(d.changed)) {
+        // changeObj is { diffs: {...}, values: [old, new] }
+        const vals = (changeObj.values && changeObj.values[1]) ? changeObj.values[1] : [];
+        const grJson = vals[8] || "[]";
+        let count = 0;
+        try { count = JSON.parse(grJson).length; } catch (e) { }
+        rows.push({ id, type: 'Changed', display: `${count} stations` });
+      }
+    }
+  }
+
+
+
+  // Filter & Sort for Special Sections (TIMESERIES, TRANSECTS)
+  if (sec === "TIMESERIES" || sec === "TRANSECTS") {
     const filtered = rows.filter(r => {
       const changeText = r.type.toLowerCase();
       const matchesFilter = (fAdded && changeText.includes('added')) || (fRemoved && changeText.includes('removed')) || (fChanged && changeText.includes('changed'));
@@ -295,7 +335,7 @@ export function renderTableFor(sec) {
         </tr>`;
     }).join("");
 
-    table.innerHTML = thead + `<tbody>${body || `<tr><td colspan="${hdrs.length + 1}" style="color:var(--text-tertiary);font-style:italic;padding:12px;">No rows match.</td></tr>`}</tbody>`;
+    table.innerHTML = thead + `<tbody>${body || `<tr><td colspan="6" style="color:var(--text-tertiary);font-style:italic;padding:12px;">No rows match.</td></tr>`}</tbody>`;
 
     // Attach listeners
     table.querySelectorAll("tbody tr").forEach(tr => {
@@ -512,7 +552,7 @@ export function renderTableFor(sec) {
     }
   }
 
-  const rows = [];
+  rows = [];
   const push = (type, id, oldArr, newArr, diffs) => rows.push({ type, id, oldArr: (oldArr || []), newArr: (newArr || []), diffs: (diffs || {}) });
 
   for (const [id, arr] of Object.entries(d.added || {})) if (passChangeFilter('Added')) push('Added', id, [], arr);
@@ -589,7 +629,7 @@ export function renderTableFor(sec) {
 
 
 
-  let thead = `<thead><tr>`;
+  thead = `<thead><tr>`;
   thead += `<th style="width:40px"></th>`; // Details column
   thead += makeTh("ElementID", 1, 180);
   thead += makeTh("Change", 2, 110);
