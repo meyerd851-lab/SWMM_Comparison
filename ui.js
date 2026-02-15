@@ -127,6 +127,30 @@ if (diffToggle) {
   };
 }
 
+// Labels Menu Toggle (Click-based)
+document.querySelectorAll('.menu').forEach(menu => {
+  const btn = menu.querySelector('.btn');
+  if (btn) {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      // Close other menus if any
+      document.querySelectorAll('.menu.open').forEach(m => {
+        if (m !== menu) m.classList.remove('open');
+      });
+      menu.classList.toggle('open');
+    });
+  }
+});
+
+// Close menu when clicking outside
+window.addEventListener('click', (e) => {
+  document.querySelectorAll('.menu.open').forEach(menu => {
+    if (!menu.contains(e.target)) {
+      menu.classList.remove('open');
+    }
+  });
+});
+
 // ==============================================================================
 // SECTION 6: DETAIL VIEW
 // ==============================================================================
@@ -210,6 +234,130 @@ export function openDetail(section, id) {
     }
 
     metaEl.innerHTML = `<span class="badge" style="background:var(--primary-light); color:var(--primary);">Hydrograph</span>`;
+    grid.appendChild(tbl);
+    onlyChangedBox.onchange = () => openDetail(section, id);
+
+    document.getElementById('modalBackdrop').classList.add('open');
+    document.getElementById('modalBackdrop').style.display = 'flex';
+    return;
+  }
+
+  // --- CURVES SPECIAL HANDLING ---
+  if (section && section.trim() === "CURVES") {
+    titleEl.textContent = `CURVE · ${id}`;
+    grid.innerHTML = "";
+    grid.style.display = 'block';
+    grid.style.border = 'none';
+    grid.style.background = 'transparent';
+
+    const dDiff = diffs?.[section] || {};
+    // Determine data based on change type
+    let oldData = null, newData = null;
+
+    if (d.added && d.added[id]) {
+      newData = d.added[id]; // [Type, JSON_Points]
+    } else if (d.removed && d.removed[id]) {
+      oldData = d.removed[id];
+    } else if (d.changed && d.changed[id]) {
+      // changed[id] is [old_list, new_list] OR {values: [old, new], ...} ??
+      // core_web.py returns simple tuple/list [old, new] for changed items usually.
+      // But let's check how we access it below... 
+      // Logic below: oldArr = Array.isArray(changedObj) ? changedObj[0] : ...
+      const cObj = d.changed[id];
+      oldData = Array.isArray(cObj) ? cObj[0] : (cObj?.values?.[0] || []);
+      newData = Array.isArray(cObj) ? cObj[1] : (cObj?.values?.[1] || []);
+    }
+
+    // Helper to parse
+    const parseCurve = (arr) => {
+      if (!arr || arr.length < 2) return { type: "—", points: [] };
+      try {
+        return { type: arr[0], points: JSON.parse(arr[1]) };
+      } catch (e) { return { type: arr[0], points: [] }; }
+    };
+
+    const c1 = parseCurve(oldData);
+    const c2 = parseCurve(newData);
+
+    // Meta info
+    let metaHTML = ``;
+    if (c1.type !== c2.type && c1.type !== "—" && c2.type !== "—") {
+      metaHTML += `<div><strong>Type:</strong> <span style="text-decoration:line-through;opacity:0.6">${escapeHtml(c1.type)}</span> → <span style="color:var(--changed)">${escapeHtml(c2.type)}</span></div>`;
+    } else {
+      metaHTML += `<div><strong>Type:</strong> ${escapeHtml(c2.type !== "—" ? c2.type : c1.type)}</div>`;
+    }
+
+    // Status Badge
+    let badge = 'Changed';
+    if (!oldData) badge = 'Added';
+    if (!newData) badge = 'Removed';
+    metaEl.innerHTML = `<span class="badge ${badge.toLowerCase()}">${badge}</span>` + metaHTML;
+
+
+    // Render Table Comparison
+    // We'll align points by index? Or just show side-by-side lists?
+    // Since X values might change, index alignment is fragile but okay for simple diffs.
+    // Let's rely on X-value matching? No, simple index alignment is safest for now.
+
+    // Merge list length
+    const len = Math.max(c1.points.length, c2.points.length);
+
+    const tbl = document.createElement("table");
+    tbl.className = "data-table";
+    tbl.innerHTML = `
+      <thead>
+        <tr>
+          <th colspan="2" style="text-align:center; border-right:1px solid var(--border-medium)">Old Points (X, Y)</th>
+          <th colspan="2" style="text-align:center;">New Points (X, Y)</th>
+        </tr>
+        <tr>
+          <th>X</th><th>Y</th>
+          <th style="border-left:1px solid var(--border-medium)">X</th><th>Y</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    `;
+    const tbody = tbl.querySelector("tbody");
+
+    const showOnlyChanged = () => onlyChangedBox.checked;
+
+    for (let i = 0; i < len; i++) {
+      const p1 = c1.points[i]; // [x, y] or undefined
+      const p2 = c2.points[i];
+
+      let isDiff = false;
+      if (p1 && p2) {
+        if (p1[0] !== p2[0] || p1[1] !== p2[1]) isDiff = true;
+      } else {
+        isDiff = true; // Added or removed point
+      }
+
+      if (showOnlyChanged() && !isDiff) continue;
+
+      const row = document.createElement("tr");
+
+      const cell = (val, isChanged) => `<td style="${isChanged ? 'background:var(--bg-highlight); color:var(--text-primary);' : ''}">${val !== undefined ? val : ''}</td>`;
+
+      // P1
+      if (p1) {
+        // Check if P1 is strictly removed (no P2)
+        const style = (!p2) ? `background:var(--removed-light); color:var(--removed);` : (isDiff ? `opacity:0.6;` : ``);
+        row.innerHTML += `<td style="${style}">${p1[0]}</td><td style="${style}; border-right:1px solid var(--border-medium);">${p1[1]}</td>`;
+      } else {
+        row.innerHTML += `<td></td><td style="border-right:1px solid var(--border-medium)"></td>`;
+      }
+
+      // P2
+      if (p2) {
+        const style = (!p1) ? `background:var(--added-light); color:var(--added);` : (isDiff ? `background:var(--changed-light); color:var(--changed);` : ``);
+        row.innerHTML += `<td style="${style}">${p2[0]}</td><td style="${style}">${p2[1]}</td>`;
+      } else {
+        row.innerHTML += `<td></td><td></td>`;
+      }
+
+      tbody.appendChild(row);
+    }
+
     grid.appendChild(tbl);
     onlyChangedBox.onchange = () => openDetail(section, id);
 

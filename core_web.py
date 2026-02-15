@@ -438,9 +438,8 @@ SECTION_HEADERS = {
 
     # --- Curves, Patterns, Timeseries ---------------------------------------
     "CURVES": [
-        "CurveID",
-        "X",
-        "Y"
+        "Type",
+        "Data"
     ],
 
     "TIMESERIES": [
@@ -542,6 +541,10 @@ def _parse_inp_iter(lines) -> INPParseResult:
     headers: Dict[str, List[str]] = {}
     tags: Dict[str, str] = {}
     descriptions: Dict[str, str] = {}
+
+    # Temporary storage for accumulators (CURVES, etc.)
+    # Map: Section -> ID -> { ...temp data... }
+    temp_curves: Dict[str, Dict] = {}
 
     current = None  # The current section being parsed (e.g., "JUNCTIONS")
     current_control_rule = None
@@ -653,6 +656,37 @@ def _parse_inp_iter(lines) -> INPParseResult:
                 ]
             continue
 
+        # [CURVES] section - Aggregate points
+        if current == 'CURVES':
+             # Tokens: Name [Type] X Y
+             # If len=4: Name, Type, X, Y
+             # If len=3: Name, X, Y
+             if len(tokens) < 3:
+                 continue
+             
+             curve_id = tokens[0]
+             
+             # Initialize accumulator for this curve if needed
+             if curve_id not in temp_curves:
+                 temp_curves[curve_id] = {"type": "", "points": []}
+
+             c_data = temp_curves[curve_id]
+             
+             x_val, y_val = None, None
+             
+             if len(tokens) >= 4:
+                 # Name Type X Y
+                 c_data["type"] = tokens[1]
+                 x_val, y_val = tokens[2], tokens[3]
+             elif len(tokens) == 3:
+                 # Name X Y
+                 x_val, y_val = tokens[1], tokens[2]
+             
+             if x_val is not None and y_val is not None:
+                 c_data["points"].append((x_val, y_val))
+                 
+             continue
+
         if current == "TITLE":
             # Treat the entire TITLE section as a single block/element
             # ID will be "Project Description", value will be list of lines
@@ -682,6 +716,24 @@ def _parse_inp_iter(lines) -> INPParseResult:
         for rule_id in sections["CONTROLS"]:
             raw_text = sections["CONTROLS"][rule_id][0]
             sections["CONTROLS"][rule_id][0] = raw_text.strip()
+
+    # Finalize CURVES: Convert temp accumulators to proper section entries
+    # Entry format: [Type, JSON_Points]
+    if temp_curves:
+        # Ensure CURVES section exists
+        if "CURVES" not in sections:
+            sections["CURVES"] = {}
+            
+        for cid, data in temp_curves.items():
+            # Create a JSON string for the points: [[x,y], [x,y]]
+            # We keep them as strings to avoid float precision issues during generic diffing if we wanted,
+            # but JSON usually implies types. Let's store as numbers if they parse, or strings if not?
+            # Actually, the original tokens are strings. Let's keep them as is?
+            # User wants standard layout valid for SWMM.
+            # But here we are producing the internal representation for comparison.
+            # JSON is best.
+            points_json = json.dumps(data["points"])
+            sections["CURVES"][cid] = [data["type"], points_json]
 
     return INPParseResult(sections, headers, tags, descriptions)
 
@@ -1555,6 +1607,7 @@ def run_compare(file1_bytes, file2_bytes, tolerances_py=None, progress_callback=
 
     # 6. Build Output JSON
     if progress_callback: progress_callback(95, "Building output...")
+
 
     # --- INJECT "Slope" COLUMN for CONDUITS ---
     if "CONDUITS" in diffs:

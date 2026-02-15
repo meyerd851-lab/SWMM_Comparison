@@ -317,7 +317,7 @@ select:focus {
   box-shadow: var(--shadow-lg);
   border-radius: var(--radius-md);
   border: 1px solid var(--border-light);
-  z-index: 1000;
+  z-index: 3000;
   top: 100%;
   padding: 6px 0;
   margin-top: 6px;
@@ -328,14 +328,35 @@ select:focus {
 .menu-content::before {
   content: '';
   position: absolute;
-  top: -6px;
+  top: -10px;
   left: 0;
   width: 100%;
-  height: 6px;
+  height: 10px;
+  background-color: transparent;
 }
 
-.menu:hover .menu-content {
+.menu.open .menu-content {
   display: block;
+}
+
+.menu .btn {
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-medium);
+  color: var(--text-main);
+  transition: border-color 0.15s box-shadow 0.15s;
+}
+
+/* Remove button hover transform/styles */
+.menu .btn:hover {
+  transform: none;
+  background-color: var(--bg-surface);
+  border-color: var(--border-medium);
+}
+
+/* Match select focus state when open */
+.menu.open .btn {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-light);
 }
 
 .menu-item {

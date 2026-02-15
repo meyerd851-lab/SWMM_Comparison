@@ -168,8 +168,22 @@
                 <option value="Added">Focus: Added</option>
                 <option value="Removed">Focus: Removed</option>
               </select>
-              <label class="checkbox-label" style="font-size:11px;"><input type="checkbox" id="labelsToggle" checked>
-                Labels</label>
+              <div class="menu">
+                <button class="btn"
+                  style="padding: 4px; font-size: 11px; font-weight: 400; justify-content: space-between; min-width: 70px;">Labels
+                  <span>▼</span></button>
+                <div class="menu-content" style="right: 0; min-width: 120px;">
+                  <label class="menu-item checkbox-label" style="justify-content: flex-start; cursor: pointer;">
+                    <input type="checkbox" id="lblNodes" checked> Nodes
+                  </label>
+                  <label class="menu-item checkbox-label" style="justify-content: flex-start; cursor: pointer;">
+                    <input type="checkbox" id="lblSubs"> Subcatchments
+                  </label>
+                  <label class="menu-item checkbox-label" style="justify-content: flex-start; cursor: pointer;">
+                    <input type="checkbox" id="lblLinks"> Conduits
+                  </label>
+                </div>
+              </div>
             </div>
           </div>
 

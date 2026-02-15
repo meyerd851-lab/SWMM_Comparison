@@ -210,13 +210,20 @@ export function buildSets(diffs, renames) {
 
 // --- DRAWING & LABELS ---
 
+// --- DRAWING & LABELS ---
+
 const labelsLayer = L.layerGroup().addTo(map);
-const LABEL_ZOOM_THRESHOLD = 17;
+const LABEL_ZOOM_THRESHOLD = 16; // Slightly lowered threshold
 
 export function drawLabels(json) {
   labelsLayer.clearLayers();
-  if (!document.getElementById('labelsToggle')?.checked) return;
   if (map.getZoom() < LABEL_ZOOM_THRESHOLD) return;
+
+  const showNodes = document.getElementById('lblNodes')?.checked;
+  const showSubs = document.getElementById('lblSubs')?.checked;
+  const showLinks = document.getElementById('lblLinks')?.checked;
+
+  if (!showNodes && !showSubs && !showLinks) return;
 
   const geom = json.geometry;
   const bounds = map.getBounds();
@@ -224,40 +231,67 @@ export function drawLabels(json) {
   // Filter Logic
   let validNodes = null;
   let validSubs = null;
+  let validLinks = null;
 
   if (currentFilterMode !== 'Default') {
     const sets = buildSets(json.diffs, json.renames);
     const modeKey = currentFilterMode.toLowerCase(); // 'added', 'removed', 'changed'
     validNodes = sets.nodes[modeKey];
     validSubs = sets.subs[modeKey];
+    validLinks = sets.links[modeKey];
   }
 
-  const nodeKeys = new Set([...(Object.keys(geom.nodes2 || {})), ...(Object.keys(geom.nodes1 || {}))]);
-  nodeKeys.forEach(id => {
-    if (validNodes && !validNodes.has(id)) return;
+  // Draw Node Labels
+  if (showNodes) {
+    const nodeKeys = new Set([...(Object.keys(geom.nodes2 || {})), ...(Object.keys(geom.nodes1 || {}))]);
+    nodeKeys.forEach(id => {
+      if (validNodes && !validNodes.has(id)) return;
+      const xy = (geom.nodes2 && geom.nodes2[id]) || (geom.nodes1 && geom.nodes1[id]);
+      if (!xy) return;
+      const ll = xyToLatLng(xy[0], xy[1]);
+      if (bounds.contains(ll)) {
+        L.tooltip({ permanent: true, direction: 'top', className: 'map-label', offset: [0, -5] })
+          .setLatLng(ll).setContent(id).addTo(labelsLayer);
+      }
+    });
+  }
 
-    const xy = (geom.nodes2 && geom.nodes2[id]) || (geom.nodes1 && geom.nodes1[id]);
-    if (!xy) return;
-    const ll = xyToLatLng(xy[0], xy[1]);
-    if (bounds.contains(ll)) {
-      L.tooltip({ permanent: true, direction: 'top', className: 'map-label', offset: [0, -5] })
-        .setLatLng(ll).setContent(id).addTo(labelsLayer);
-    }
-  });
+  // Draw Subcatchment Labels
+  if (showSubs) {
+    const subKeys = new Set([...(Object.keys(geom.subs2 || {})), ...(Object.keys(geom.subs1 || {}))]);
+    subKeys.forEach(id => {
+      if (validSubs && !validSubs.has(id)) return;
+      const coords = (geom.subs2 && geom.subs2[id]) || (geom.subs1 && geom.subs1[id]);
+      if (!coords || coords.length < 3) return;
+      const centerXY = centroidOfPoly(coords); // Use centroid
+      if (!centerXY) return;
+      const ll = xyToLatLng(centerXY[0], centerXY[1]);
+      if (bounds.contains(ll)) {
+        L.tooltip({ permanent: true, direction: 'center', className: 'map-label' }).setLatLng(ll).setContent(id).addTo(labelsLayer);
+      }
+    });
+  }
 
-  const subKeys = new Set([...(Object.keys(geom.subs2 || {})), ...(Object.keys(geom.subs1 || {}))]);
-  subKeys.forEach(id => {
-    if (validSubs && !validSubs.has(id)) return;
+  // Draw Link Labels (Conduits)
+  if (showLinks) {
+    const linkKeys = new Set([...(Object.keys(geom.links2 || {})), ...(Object.keys(geom.links1 || {}))]);
+    linkKeys.forEach(id => {
+      if (validLinks && !validLinks.has(id)) return;
+      const coords = (geom.links2 && geom.links2[id]) || (geom.links1 && geom.links1[id]);
+      if (!coords) return;
+      // Calculate midpoint for label
+      const mid = midOfLine(coords);
+      if (!mid) return;
+      const ll = xyToLatLng(mid[0], mid[1]);
 
-    const coords = (geom.subs2 && geom.subs2[id]) || (geom.subs1 && geom.subs1[id]);
-    if (!coords || coords.length < 3) return;
-    const centerXY = centroidOfPoly(coords);
-    const ll = xyToLatLng(centerXY[0], centerXY[1]);
-    if (bounds.contains(ll)) {
-      L.tooltip({ permanent: true, direction: 'center', className: 'map-label' }).setLatLng(ll).setContent(id).addTo(labelsLayer);
-    }
-  });
+      if (bounds.contains(ll)) {
+        L.tooltip({ permanent: true, direction: 'center', className: 'map-label' })
+          .setLatLng(ll).setContent(id).addTo(labelsLayer);
+      }
+    });
+  }
 }
+
 
 const throttledDrawLabels = throttle(() => {
   if (!state.LAST.json) return;
@@ -265,6 +299,10 @@ const throttledDrawLabels = throttle(() => {
 }, 200);
 
 map.on('zoomend moveend', throttledDrawLabels);
+
+document.getElementById('lblNodes').addEventListener('change', throttledDrawLabels);
+document.getElementById('lblSubs').addEventListener('change', throttledDrawLabels);
+document.getElementById('lblLinks').addEventListener('change', throttledDrawLabels);
 
 function resetLayers() {
   Object.values(layers).forEach(groupSet => {
@@ -850,7 +888,12 @@ if (mapModeSelect) {
 }
 
 // Labels Toggle
-document.getElementById('labelsToggle').addEventListener('change', () => {
-  if (!state.LAST.json) return;
-  throttledDrawLabels();
-});
+// Labels Toggle
+const addLabelListener = (id) => {
+  const el = document.getElementById(id);
+  if (el) el.addEventListener('change', throttledDrawLabels);
+};
+
+addLabelListener('lblNodes');
+addLabelListener('lblSubs');
+addLabelListener('lblLinks');

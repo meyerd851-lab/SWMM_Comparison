@@ -433,11 +433,27 @@ export function renderTableFor(sec) {
       } else {
         const ov = oldA[i] ?? "";
         const nv = newA[i] ?? "";
-        if (r.type === "Added") tr += `<td style="color:var(--added)">${escapeHtml(nv)}</td>`;
-        else if (r.type === "Removed") tr += `<td style="color:var(--removed)">${escapeHtml(ov)}</td>`;
-        else tr += (ov !== nv)
-          ? `<td><span style="opacity:0.6;font-size:0.9em;">${escapeHtml(ov)}</span> → <span>${escapeHtml(nv)}</span></td>`
-          : `<td>${escapeHtml(nv)}</td>`;
+        if (sec && sec.trim() === "CURVES" && i === 1) { // 1 is 'Data' column (0 is Type)
+          // Value is JSON string of points
+          const parseCount = (s) => {
+            try { return JSON.parse(s).length + " pts"; } catch (e) { return "—"; }
+          };
+          const oTxt = parseCount(ov);
+          const nTxt = parseCount(nv);
+
+          if (r.type === "Added") tr += `<td style="color:var(--added)">${escapeHtml(nTxt)}</td>`;
+          else if (r.type === "Removed") tr += `<td style="color:var(--removed)">${escapeHtml(oTxt)}</td>`;
+          else tr += (oTxt !== nTxt)
+            ? `<td><span style="opacity:0.6;font-size:0.9em;">${escapeHtml(oTxt)}</span> → <span>${escapeHtml(nTxt)}</span></td>`
+            : `<td>${escapeHtml(nTxt)}</td>`;
+        } else {
+          // Normal rendering
+          if (r.type === "Added") tr += `<td style="color:var(--added)">${escapeHtml(nv)}</td>`;
+          else if (r.type === "Removed") tr += `<td style="color:var(--removed)">${escapeHtml(ov)}</td>`;
+          else tr += (ov !== nv)
+            ? `<td><span style="opacity:0.6;font-size:0.9em;">${escapeHtml(ov)}</span> → <span>${escapeHtml(nv)}</span></td>`
+            : `<td>${escapeHtml(nv)}</td>`;
+        }
       }
     }
 
