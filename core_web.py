@@ -1709,6 +1709,15 @@ def run_compare(file1_bytes, file2_bytes, tolerances_py=None, progress_callback=
     if progress_callback: progress_callback(40, "Comparing sections...")
     diffs, headers = compare_sections(pr1.sections, pr2.sections, pr1.headers, pr2.headers, progress_callback)
 
+    # --- INJECT WARNING SECTIONS ---
+    # If a section was cleared due to warnings, it won't be in diffs.
+    # We must force it in so the frontend sees key and renders the warning.
+    for sec in warnings:
+        if sec not in diffs:
+            diffs[sec] = DiffSection()
+            # Restore headers if possible, or use empty
+            headers[sec] = []
+
     # --- FORCE RENAMED ITEMS INTO "CHANGED" ---
 
     for sec, mapping in renames.items():
