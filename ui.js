@@ -655,7 +655,7 @@ export async function exportToExcel() {
   await new Promise(resolve => setTimeout(resolve, 50));
 
   const wb = XLSX.utils.book_new();
-  const { diffs, headers, tolerances } = state.LAST.json;
+  const { diffs, headers, tolerances, warnings } = state.LAST.json;
 
   // --- 1. Summary Sheet ---
   const summaryData = [
@@ -700,6 +700,14 @@ export async function exportToExcel() {
   };
 
   for (const sec of Object.keys(diffs).sort()) {
+    // Check for warnings
+    if (warnings && warnings[sec]) {
+      const ws = XLSX.utils.aoa_to_sheet([["⚠️ Cannot Compare Section"], [warnings[sec]]]);
+      const sheetName = sec.replace(/[:\\/?*[\]]/g, "").substring(0, 31);
+      XLSX.utils.book_append_sheet(wb, ws, sheetName);
+      continue;
+    }
+
     const d = diffs[sec];
     let sheetData = [];
     let hdrs = headers[sec] ? [...headers[sec]] : [];

@@ -198,7 +198,19 @@ const SECTION_REF_MAP = {
 
 export function renderTableFor(sec) {
   const table = document.getElementById('table');
-  const { diffs, headers } = state.LAST.json;
+  const { diffs, headers, warnings } = state.LAST.json;
+
+  // Check for section warnings
+  if (warnings && warnings[sec]) {
+    table.innerHTML = `
+      <div style="padding: 2rem; text-align: center; color: var(--text-secondary); background: var(--bg-surface); border: 1px solid var(--border-medium); margin: 1rem; border-radius: 8px;">
+          <div style="font-weight: 600; font-size: 1.1em; margin-bottom: 0.5rem; color: var(--removed);">⚠️ Cannot Compare Section</div>
+          <div>${escapeHtml(warnings[sec])}</div>
+      </div>
+    `;
+    return;
+  }
+
   const d = diffs[sec] || { added: {}, removed: {}, changed: {} };
   const q = document.getElementById('search').value.trim().toLowerCase();
 

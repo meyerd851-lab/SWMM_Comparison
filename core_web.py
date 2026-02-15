@@ -97,9 +97,9 @@ SECTION_HEADERS = {
         "PctRouted"    # %Routed (optional)
     ],
 
-    "INFILTRATION (HORTON)": [
+    "INFILTRATION": [
         "Subcatch",
-        "Max. Infil. Rate", "Min. Infil. Rate", "Decay Constant", "Drying Time", "Max Volume",  # interpretation depends on method
+        "Max. Infil. Rate", "Min. Infil. Rate", "Decay Constant", "Drying Time", "Max Volume",  # Interpretation depends on method
         "Method"                       # optional override
     ],
 
@@ -783,6 +783,27 @@ def _parse_inp_iter(lines) -> INPParseResult:
                 gage = gages.get(hid, "")
                 values.append(gage)
     
+    # Post-process INFILTRATION based on OPTIONS
+    # Default is Horton (matches SECTION_HEADERS default).
+    # If Options -> INFILTRATION is GREEN_AMPT, switch headers and slice data.
+    infil_method = "HORTON"
+    if "OPTIONS" in sections and "INFILTRATION" in sections["OPTIONS"]:
+         # Value is a list of strings, usually just one string "GREEN_AMPT"
+         val_list = sections["OPTIONS"]["INFILTRATION"]
+         if val_list and val_list[0].upper().strip() == "GREEN_AMPT":
+             infil_method = "GREEN_AMPT"
+    
+    if infil_method == "GREEN_AMPT":
+        # Update Headers
+        headers["INFILTRATION"] = ["Subcatch", "Suction Head (in)", "Conductivity (in/hr)", "Initial Deficit (frac.)"]
+        
+        # Update Data (Slice to first 3 columns)
+        if "INFILTRATION" in sections:
+            for sub_id, vals in sections["INFILTRATION"].items():
+                # Vals might have 5 items (params 1-5), Green-Ampt uses only first 3.
+                if len(vals) > 3:
+                     sections["INFILTRATION"][sub_id] = vals[:3]
+
     return INPParseResult(sections, headers, tags, descriptions)
 
 
@@ -1645,6 +1666,27 @@ def run_compare(file1_bytes, file2_bytes, tolerances_py=None, progress_callback=
     g2 = _parse_geom_iter(f2)
     if progress_callback: progress_callback(20, "Parsed Geometry...")
 
+    # 2.5 Check for Infiltration Mismatch
+    warnings = {}
+
+    def get_infil_method(pr):
+        if "OPTIONS" in pr.sections and "INFILTRATION" in pr.sections["OPTIONS"]:
+            val = pr.sections["OPTIONS"]["INFILTRATION"]
+            return val[0].upper().strip() if val else "HORTON"
+        return "HORTON"
+
+    m1 = get_infil_method(pr1)
+    m2 = get_infil_method(pr2)
+
+    if m1 != m2:
+        warnings["INFILTRATION"] = f"Files use differing infiltration models: {m1} vs {m2}"
+        # Clear data to prevent comparison of incompatible fields
+        if "INFILTRATION" in pr1.sections: pr1.sections["INFILTRATION"] = {}
+        if "INFILTRATION" in pr2.sections: pr2.sections["INFILTRATION"] = {}
+        # Clear headers to avoid confusion
+        pr1.headers["INFILTRATION"] = []
+        pr2.headers["INFILTRATION"] = []
+
     # --- Handle Tolerances ---
     # Handle tolerances whether passed as a JS Proxy or a generic Python dict
     tolerances = {}
@@ -1814,6 +1856,7 @@ def run_compare(file1_bytes, file2_bytes, tolerances_py=None, progress_callback=
         "sections2": pr2.sections,
         "hydrographs": hydrographs,
         "tolerances": tolerances,
+        "warnings": warnings
     }
     return json.dumps(out)
 
