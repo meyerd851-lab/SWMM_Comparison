@@ -433,7 +433,10 @@ export function renderTableFor(sec) {
       } else {
         const ov = oldA[i] ?? "";
         const nv = newA[i] ?? "";
-        if (sec && sec.trim() === "CURVES" && i === 1) { // 1 is 'Data' column (0 is Type)
+        if (
+          (sec && sec.trim() === "CURVES" && i === 2) ||
+          (sec && (sec.trim() === "VERTICES" || sec.trim() === "POLYGONS") && i === 1)
+        ) {
           // Value is JSON string of points
           const parseCount = (s) => {
             try { return JSON.parse(s).length + " pts"; } catch (e) { return "—"; }

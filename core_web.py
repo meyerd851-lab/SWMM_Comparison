@@ -438,6 +438,7 @@ SECTION_HEADERS = {
 
     # --- Curves, Patterns, Timeseries ---------------------------------------
     "CURVES": [
+        "CurveID",
         "Type",
         "Data"
     ],
@@ -479,14 +480,12 @@ SECTION_HEADERS = {
 
     "VERTICES": [
         "Link",
-        "X",
-        "Y"
+        "Data"
     ],
 
     "POLYGONS": [
         "Subcatch",
-        "X",
-        "Y"
+        "Data"
     ],
 
     # Some project files also include [LABELS], [BACKDROP], etc.; you can add as needed:
@@ -542,9 +541,22 @@ def _parse_inp_iter(lines) -> INPParseResult:
     tags: Dict[str, str] = {}
     descriptions: Dict[str, str] = {}
 
-    # Temporary storage for accumulators (CURVES, etc.)
-    # Map: Section -> ID -> { ...temp data... }
-    temp_curves: Dict[str, Dict] = {}
+    # Temporary storage for accumulators (CURVES, VERTICES, POLYGONS)
+    # Map: Section -> ID -> { ...temp data... } or List
+    # For CURVES: ID -> {type, points}
+    # For others: Section -> ID -> List[Points]
+    # We will use 'temp_curves' as a generic holder or just use separate dicts?
+    # Actually, let's keep 'temp_curves' for CURVES specifically to avoid breaking existing logic logic,
+    # but I reused it in the chunks above. Let's align.
+    # In the chunk above I used temp_curves[current] which implies temp_curves is Dict[Section, Dict[ID, Data]]
+    # BUT currently temp_curves is Dict[ID, Dict]. 
+    # I need to refactor temp_curves to be section-aware or add new accumulators.
+    
+    # REFACTOR:
+    # temp_curves: Dict[str, Dict] (ID -> Data) for CURVES only
+    # temp_points: Dict[str, Dict[str, List]] (Section -> ID -> List[(x,y)])
+    temp_curves: Dict[str, Dict] = {} 
+    temp_points: Dict[str, Dict[str, List]] = defaultdict(lambda: defaultdict(list))
 
     current = None  # The current section being parsed (e.g., "JUNCTIONS")
     current_control_rule = None
@@ -687,6 +699,19 @@ def _parse_inp_iter(lines) -> INPParseResult:
                  
              continue
 
+        # [VERTICES] and [POLYGONS] - Aggregate points
+        if current in ('VERTICES', 'POLYGONS'):
+             # Tokens: ID X Y
+             if len(tokens) < 3:
+                 continue
+             
+             elm_id = tokens[0]
+             x_val, y_val = tokens[1], tokens[2]
+             
+             # Use temp_points accumulator
+             temp_points[current][elm_id].append((x_val, y_val))
+             continue
+
         if current == "TITLE":
             # Treat the entire TITLE section as a single block/element
             # ID will be "Project Description", value will be list of lines
@@ -734,6 +759,15 @@ def _parse_inp_iter(lines) -> INPParseResult:
             # JSON is best.
             points_json = json.dumps(data["points"])
             sections["CURVES"][cid] = [data["type"], points_json]
+
+    # Finalize VERTICES and POLYGONS
+    for sec_name in ['VERTICES', 'POLYGONS']:
+        if sec_name in temp_points:
+            if sec_name not in sections:
+                sections[sec_name] = {}
+            for eid, points in temp_points[sec_name].items():
+                # points is list of (x,y) tuples
+                sections[sec_name][eid] = [json.dumps(points)]
 
     return INPParseResult(sections, headers, tags, descriptions)
 

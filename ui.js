@@ -242,7 +242,84 @@ export function openDetail(section, id) {
     return;
   }
 
-  // --- CURVES SPECIAL HANDLING ---
+  // --- VERTICES & POLYGONS SPECIAL HANDLING ---
+  if (section && (section.trim() === "VERTICES" || section.trim() === "POLYGONS")) {
+    titleEl.textContent = `${section} · ${id}`;
+    grid.innerHTML = "";
+    grid.style.display = 'block';
+
+    const dDiff = diffs?.[section] || {};
+    let oldData = null, newData = null;
+
+    if (d.added && d.added[id]) {
+      newData = d.added[id];
+    } else if (d.removed && d.removed[id]) {
+      oldData = d.removed[id];
+    } else if (d.changed && d.changed[id]) {
+      const cObj = d.changed[id];
+      oldData = Array.isArray(cObj) ? cObj[0] : (cObj?.values?.[0] || []);
+      newData = Array.isArray(cObj) ? cObj[1] : (cObj?.values?.[1] || []);
+    }
+
+    const parsePoints = (arr) => {
+      // For VERTICES/POLYGONS, arr is [JSON_String]
+      if (!arr || arr.length < 1) return [];
+      try {
+        return JSON.parse(arr[0]);
+      } catch (e) { return []; }
+    };
+
+    const pts1 = parsePoints(oldData);
+    const pts2 = parsePoints(newData);
+
+    let badge = 'Changed';
+    if (!oldData) badge = 'Added';
+    if (!newData) badge = 'Removed';
+    metaEl.innerHTML = `<span class="badge ${badge.toLowerCase()}">${badge}</span>`;
+
+    // Render Table
+    const allRows = Math.max(pts1.length, pts2.length);
+    let rowsHTML = "";
+
+    for (let i = 0; i < allRows; i++) {
+      const p1 = pts1[i]; // [x, y]
+      const p2 = pts2[i]; // [x, y]
+
+      let xCell = "", yCell = "";
+
+      if (p1 && p2) {
+        // Compare
+        const xMatch = p1[0] == p2[0];
+        const yMatch = p1[1] == p2[1];
+
+        xCell = xMatch ? fmtNum(p2[0]) : `<span style="text-decoration:line-through;opacity:0.6">${fmtNum(p1[0])}</span> <span style="color:var(--changed)">${fmtNum(p2[0])}</span>`;
+        yCell = yMatch ? fmtNum(p2[1]) : `<span style="text-decoration:line-through;opacity:0.6">${fmtNum(p1[1])}</span> <span style="color:var(--changed)">${fmtNum(p2[1])}</span>`;
+      } else if (p1) {
+        // Removed point (or just end of list)
+        xCell = `<span style="color:var(--removed)">${fmtNum(p1[0])}</span>`;
+        yCell = `<span style="color:var(--removed)">${fmtNum(p1[1])}</span>`;
+      } else if (p2) {
+        // Added point
+        xCell = `<span style="color:var(--added)">${fmtNum(p2[0])}</span>`;
+        yCell = `<span style="color:var(--added)">${fmtNum(p2[1])}</span>`;
+      }
+
+      rowsHTML += `<tr><td style="color:#888;font-size:0.8em;">${i + 1}</td><td>${xCell}</td><td>${yCell}</td></tr>`;
+    }
+
+    const tbl = document.createElement("table");
+    tbl.className = "data-table";
+    tbl.innerHTML = `<thead><tr><th style="width:30px">#</th><th>X</th><th>Y</th></tr></thead><tbody>${rowsHTML}</tbody>`;
+
+    grid.appendChild(tbl);
+
+    // Setup modal
+    document.getElementById('modalBackdrop').classList.add('open');
+    document.getElementById('modalBackdrop').style.display = 'flex';
+    return;
+  }
+
+  // --- CURVES SPECIAL HANDLING --- //
   if (section && section.trim() === "CURVES") {
     titleEl.textContent = `CURVE · ${id}`;
     grid.innerHTML = "";
