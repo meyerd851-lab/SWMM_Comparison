@@ -309,10 +309,44 @@ export function renderTableFor(sec) {
     }
   }
 
+  // --- LID_CONTROLS ---
+  else if (sec === "LID_CONTROLS") {
+    const hdrs = ["LID Name", "Type", "Layers", "Change"];
+    thead = `<thead><tr><th style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-tertiary); font-weight: 500;"></th>`;
+    for (const h of hdrs) thead += `<th style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-tertiary); font-weight: 500;">${escapeHtml(h)}</th>`;
+    thead += `</tr></thead>`;
+
+    rows = [];
+    const LID_TYPE_NAMES = { BC: "Bio-Retention", IT: "Infil. Trench", PP: "Perm. Pavement", VS: "Veg. Swale", RG: "Rain Garden", RD: "Rooftop Disconn." };
+
+    const processEntry = (type, id, values) => {
+      const lidType = values[0] || "";
+      const layersJson = values[1] || "{}";
+      let layerCount = 0;
+      try { layerCount = Object.keys(JSON.parse(layersJson)).length; } catch (e) { }
+      const typeName = LID_TYPE_NAMES[lidType] || lidType;
+      rows.push({ id, type, tType: typeName, display: `${layerCount}` });
+    };
+
+    if (d.added) for (const [id, vals] of Object.entries(d.added)) processEntry('Added', id, vals);
+    if (d.removed) for (const [id, vals] of Object.entries(d.removed)) processEntry('Removed', id, vals);
+    if (d.changed) {
+      for (const [id, changeObj] of Object.entries(d.changed)) {
+        const vals = (changeObj.values && changeObj.values[1]) ? changeObj.values[1] : [];
+        const lidType = vals[0] || "";
+        const layersJson = vals[1] || "{}";
+        let layerCount = 0;
+        try { layerCount = Object.keys(JSON.parse(layersJson)).length; } catch (e) { }
+        const typeName = LID_TYPE_NAMES[lidType] || lidType;
+        rows.push({ id, type: 'Changed', tType: typeName, display: `${layerCount} layers` });
+      }
+    }
+  }
 
 
-  // Filter & Sort for Special Sections (TIMESERIES, TRANSECTS)
-  if (sec === "TIMESERIES" || sec === "TRANSECTS") {
+
+  // Filter & Sort for Special Sections (TIMESERIES, TRANSECTS, LID_CONTROLS)
+  if (sec === "TIMESERIES" || sec === "TRANSECTS" || sec === "LID_CONTROLS") {
     const filtered = rows.filter(r => {
       const changeText = r.type.toLowerCase();
       const matchesFilter = (fAdded && changeText.includes('added')) || (fRemoved && changeText.includes('removed')) || (fChanged && changeText.includes('changed'));

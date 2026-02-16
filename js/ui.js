@@ -440,6 +440,145 @@ export function openDetail(section, id) {
     return;
   }
 
+  // --- LID_CONTROLS SPECIAL HANDLING ---
+  if (section === "LID_CONTROLS") {
+    titleEl.textContent = `LID CONTROL · ${id}`;
+    grid.innerHTML = "";
+    grid.style.display = 'block';
+    grid.style.border = 'none';
+    grid.style.background = 'transparent';
+
+    const d = diffs.LID_CONTROLS;
+    let oldData = [], newData = [];
+
+    if (d.added && d.added[id]) newData = d.added[id];
+    else if (d.removed && d.removed[id]) oldData = d.removed[id];
+    else if (d.changed && d.changed[id]) {
+      const cObj = d.changed[id];
+      const pair = (cObj && cObj.values) ? cObj.values : cObj;
+      oldData = pair[0] || [];
+      newData = pair[1] || [];
+    }
+
+    const LID_TYPE_NAMES = { BC: "Bio-Retention Cell", IT: "Infiltration Trench", PP: "Permeable Pavement", VS: "Vegetative Swale", RG: "Rain Garden", RD: "Rooftop Disconnection" };
+
+    const LAYER_PARAMS = {
+      SURFACE: ["Berm Height (in)", "Veg Volume (frac)", "Roughness (n)", "Slope (%)", "Swale Side Slope"],
+      SOIL: ["Thickness (in)", "Porosity", "Field Capacity", "Wilting Point", "Conductivity (in/hr)", "Cond. Slope", "Suction Head (in)"],
+      PAVEMENT: ["Thickness (in)", "Void Ratio", "Imperv. Surface (frac)", "Permeability (in/hr)", "Clog Factor", "Regen Interval (days)", "Regen Fraction"],
+      STORAGE: ["Thickness (in)", "Void Ratio", "Seepage Rate (in/hr)", "Clog Factor", "Covered"],
+      DRAIN: ["Coeff (in/hr)", "Exponent", "Offset Height (in)", "Open Level (in)", "Closed Level (in)", "Control Curve"],
+      DRAINMAT: ["Thickness (in)", "Void Fraction", "Roughness"]
+    };
+
+    const parseLID = (arr) => {
+      if (!arr || arr.length < 2) return { type: "—", layers: {} };
+      try { return { type: arr[0], layers: JSON.parse(arr[1]) }; }
+      catch (e) { return { type: arr[0], layers: {} }; }
+    };
+
+    const l1 = parseLID(oldData);
+    const l2 = parseLID(newData);
+
+    // Badge
+    let badge = 'Changed';
+    if (!oldData.length) badge = 'Added';
+    if (!newData.length) badge = 'Removed';
+
+    // Type meta
+    let metaHTML = '';
+    const t1Name = LID_TYPE_NAMES[l1.type] || l1.type;
+    const t2Name = LID_TYPE_NAMES[l2.type] || l2.type;
+    if (l1.type !== l2.type && l1.type !== "—" && l2.type !== "—") {
+      metaHTML += `<div style="margin-top:8px"><strong>Type:</strong> <span style="text-decoration:line-through;opacity:0.6">${escapeHtml(t1Name)}</span> → <span style="color:var(--changed)">${escapeHtml(t2Name)}</span></div>`;
+    } else {
+      metaHTML += `<div style="margin-top:8px"><strong>Type:</strong> ${escapeHtml(l2.type !== "—" ? t2Name : t1Name)}</div>`;
+    }
+    metaEl.innerHTML = `<span class="badge ${badge.toLowerCase()}">${badge}</span>` + metaHTML;
+
+    // Collect all layer names
+    const allLayers = new Set([...Object.keys(l1.layers), ...Object.keys(l2.layers)]);
+    const layerOrder = ["SURFACE", "SOIL", "PAVEMENT", "STORAGE", "DRAIN", "DRAINMAT", "REMOVALS"];
+    const sortedLayers = layerOrder.filter(l => allLayers.has(l));
+    // Add any layers not in the predefined order
+    for (const l of allLayers) { if (!sortedLayers.includes(l)) sortedLayers.push(l); }
+
+    let html = '';
+
+    for (const layerName of sortedLayers) {
+      const params1 = l1.layers[layerName];
+      const params2 = l2.layers[layerName];
+      const paramLabels = LAYER_PARAMS[layerName] || [];
+
+      html += `<div style="margin-bottom:12px; margin-top:16px; font-weight:600; color:var(--text-secondary); text-transform:uppercase; font-size:0.85em; letter-spacing:0.5px;">${escapeHtml(layerName)}</div>`;
+
+      if (layerName === "REMOVALS") {
+        // REMOVALS: array of [pollutant, percent] pairs
+        const r1 = Array.isArray(params1) ? params1 : [];
+        const r2 = Array.isArray(params2) ? params2 : [];
+        const map1 = {};
+        r1.forEach(p => { if (p.length >= 2) map1[p[0]] = p[1]; });
+        const map2 = {};
+        r2.forEach(p => { if (p.length >= 2) map2[p[0]] = p[1]; });
+        const allPollutants = new Set([...Object.keys(map1), ...Object.keys(map2)]);
+
+        html += `<table class="data-table" style="margin-bottom:16px;"><thead><tr><th>Pollutant</th><th>Old %</th><th>New %</th></tr></thead><tbody>`;
+        for (const pollut of allPollutants) {
+          const ov = map1[pollut] ?? "";
+          const nv = map2[pollut] ?? "";
+          const isDiff = ov !== nv;
+          const oldStyle = isDiff ? 'style="text-decoration:line-through; opacity:0.6"' : '';
+          const newStyle = isDiff ? 'style="color:var(--changed); font-weight:600"' : '';
+          if (!ov) {
+            html += `<tr><td>${escapeHtml(pollut)}</td><td></td><td style="color:var(--added)">${escapeHtml(nv)}</td></tr>`;
+          } else if (!nv) {
+            html += `<tr><td>${escapeHtml(pollut)}</td><td style="color:var(--removed)">${escapeHtml(ov)}</td><td></td></tr>`;
+          } else {
+            html += `<tr><td>${escapeHtml(pollut)}</td><td ${oldStyle}>${escapeHtml(ov)}</td><td ${newStyle}>${escapeHtml(nv)}</td></tr>`;
+          }
+        }
+        html += `</tbody></table>`;
+        continue;
+      }
+
+      // Standard layer: array of parameter values
+      const p1 = Array.isArray(params1) ? params1 : [];
+      const p2 = Array.isArray(params2) ? params2 : [];
+      const maxLen = Math.max(p1.length, p2.length, paramLabels.length);
+
+      html += `<table class="data-table" style="margin-bottom:16px;"><thead><tr><th>Parameter</th><th>Old</th><th>New</th></tr></thead><tbody>`;
+      for (let i = 0; i < maxLen; i++) {
+        const label = paramLabels[i] || `Param ${i + 1}`;
+        const ov = p1[i] ?? "";
+        const nv = p2[i] ?? "";
+        const isDiff = ov !== nv;
+
+        if (onlyChangedBox.checked && !isDiff) continue;
+
+        const oldStyle = isDiff ? 'style="text-decoration:line-through; opacity:0.6"' : '';
+        const newStyle = isDiff ? 'style="color:var(--changed); font-weight:600"' : '';
+
+        if (!params1 && params2) {
+          // Entire layer added
+          html += `<tr><td>${escapeHtml(label)}</td><td></td><td style="color:var(--added)">${escapeHtml(nv)}</td></tr>`;
+        } else if (params1 && !params2) {
+          // Entire layer removed
+          html += `<tr><td>${escapeHtml(label)}</td><td style="color:var(--removed)">${escapeHtml(ov)}</td><td></td></tr>`;
+        } else {
+          html += `<tr><td>${escapeHtml(label)}</td><td ${oldStyle}>${escapeHtml(ov)}</td><td ${newStyle}>${escapeHtml(nv)}</td></tr>`;
+        }
+      }
+      html += `</tbody></table>`;
+    }
+
+    grid.innerHTML = html;
+    onlyChangedBox.onchange = () => openDetail(section, id);
+
+    document.getElementById('modalBackdrop').classList.add('open');
+    document.getElementById('modalBackdrop').style.display = 'flex';
+    return;
+  }
+
   // --- TRANSECTS SPECIAL HANDLING ---
   if (section === "TRANSECTS") {
     titleEl.textContent = `TRANSECT · ${id}`;

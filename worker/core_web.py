@@ -81,11 +81,9 @@ SECTION_HEADERS = {
     ],
 
     "LID_CONTROLS": [
-        # First line: Name Type
         "Name",
-        "Type",        # BC/RG/GR/IT/PP/RB/RD/VS
-        # Subsequent SURFACE/SOIL/PAVEMENT/STORAGE/DRAIN/DRAINMAT/REMOVALS
-        # lines get parsed separately; if you show them as a grid you may want another view.
+        "Type",        # BC/IT/PP/VS/RG/RD
+        "Layers"
     ],
 
     "LID_USAGE": [
@@ -516,6 +514,9 @@ def _parse_inp_iter(lines) -> INPParseResult:
     temp_transects: Dict[str, Dict] = {} # {TransectID: {nc: [], x1: [], gr: []}}
     current_nc: List[str] = ["0", "0", "0"] # [Left, Right, Channel]
     current_transect_id: str = None
+    temp_lid_controls: Dict[str, Dict] = {} # {LID_ID: {type: "", layers: {}}}
+    LID_KNOWN_TYPES = {"BC", "IT", "PP", "VS", "RG", "RD"}
+    LID_KNOWN_LAYERS = {"SURFACE", "SOIL", "PAVEMENT", "STORAGE", "DRAIN", "DRAINMAT", "REMOVALS"}
 
     current = None  # The current section being parsed (e.g., "JUNCTIONS")
     current_control_rule = None
@@ -572,37 +573,26 @@ def _parse_inp_iter(lines) -> INPParseResult:
              record_type = tokens[0].upper()
              
              if record_type == "NC":
-                 # NC Nleft Nright Nchanl
-                 # Update global "current" NC values to be used by subsequent X1 lines
                  if len(tokens) >= 4:
                      current_nc = tokens[1:4]
                  continue
                  
              elif record_type == "X1":
-                 # X1 Name Nsta Xleft Xright 0 0 0 Lfactor Wfactor Eoffset
                  if len(tokens) < 2: continue
-                 
                  tid = tokens[1]
                  current_transect_id = tid
-                 
                  if tid not in temp_transects:
                      temp_transects[tid] = {
-                         "nc": list(current_nc), # Copy current NC values
+                         "nc": list(current_nc),
                          "x1": [],
                          "gr": []
                      }
-                 
-                 # Store X1 parameters (Nsta, Xleft, Xright... etc)
-                 # We assume tokens[2:] contains the params.
                  temp_transects[tid]["x1"] = tokens[2:]
                  continue
                  
              elif record_type == "GR":
-                 # GR Elev Station ...
                  if not current_transect_id or current_transect_id not in temp_transects:
                      continue
-                     
-                 # Parse pairs
                  raw_vals = tokens[1:]
                  for i in range(0, len(raw_vals), 2):
                      if i+1 < len(raw_vals):
@@ -610,10 +600,45 @@ def _parse_inp_iter(lines) -> INPParseResult:
                          sta = raw_vals[i+1]
                          temp_transects[current_transect_id]["gr"].append([sta, elev])
                  continue
-                 
              else:
-                 # Unknown or unrelated line? 
                  continue
+
+        # [LID_CONTROLS] - Multi-line: Type line + Layer lines
+        if current == 'LID_CONTROLS':
+             if line.startswith(";") or not line.strip():
+                 continue
+             tokens = line.strip().split()
+             if len(tokens) < 2: continue
+             
+             lid_id = tokens[0]
+             second = tokens[1].upper()
+             
+             # Type definition line: "LID1 BC"
+             if second in LID_KNOWN_TYPES:
+                 if lid_id not in temp_lid_controls:
+                     temp_lid_controls[lid_id] = {"type": second, "layers": {}}
+                 else:
+                     temp_lid_controls[lid_id]["type"] = second
+                 continue
+             
+             # Layer line: "LID1 SURFACE 0.0 0.0 0.1 1.0 5"
+             if second in LID_KNOWN_LAYERS:
+                 if lid_id not in temp_lid_controls:
+                     temp_lid_controls[lid_id] = {"type": "", "layers": {}}
+                 
+                 if second == "REMOVALS":
+                     # REMOVALS: pairs of [pollutant, percent]
+                     raw_vals = tokens[2:]
+                     pairs = []
+                     for i in range(0, len(raw_vals), 2):
+                         if i+1 < len(raw_vals):
+                             pairs.append([raw_vals[i], raw_vals[i+1]])
+                     temp_lid_controls[lid_id]["layers"]["REMOVALS"] = pairs
+                 else:
+                     temp_lid_controls[lid_id]["layers"][second] = tokens[2:]
+                 continue
+             
+             continue
 
         # 2. Capture Description Comments
         #    Some sections have a description line starting with a semicolon immediately after the header.
@@ -897,26 +922,26 @@ def _parse_inp_iter(lines) -> INPParseResult:
             sections["TRANSECTS"] = {}
         
         for tid, tdata in temp_transects.items():
-            # Entry format: [nLeft, nRight, nChan, XLeft, XRight, Lfactor, Wfactor, Eoffset, JSON_Geometry]
-            
             nc = tdata["nc"]
             x1 = tdata["x1"]
             gr = tdata["gr"]
-            
-            # Extract key params for table view
             nL, nR, nC = (nc + ["0", "0", "0"])[:3]
-            
-            # X1 indices: 0=Nsta, 1=Xleft, 2=Xright, 3,4,5=0, 6=Lfac, 7=Wfac, 8=Eoff
             val_xL = x1[1] if len(x1) > 1 else "0"
             val_xR = x1[2] if len(x1) > 2 else "0"
             val_L = x1[6] if len(x1) > 6 else "0"
             val_W = x1[7] if len(x1) > 7 else "0"
             val_E = x1[8] if len(x1) > 8 else "0"
-            
             gr_json = json.dumps(gr)
-            
             row_data = [nL, nR, nC, val_xL, val_xR, val_L, val_W, val_E, gr_json]
             sections["TRANSECTS"][tid] = row_data
+
+    # Finalize LID_CONTROLS
+    if temp_lid_controls:
+        if "LID_CONTROLS" not in sections:
+            sections["LID_CONTROLS"] = {}
+        for lid_id, ldata in temp_lid_controls.items():
+            layers_json = json.dumps(ldata["layers"])
+            sections["LID_CONTROLS"][lid_id] = [ldata["type"], layers_json]
 
     # Post-process INFILTRATION based on OPTIONS
     # Default is Horton (matches SECTION_HEADERS default).
