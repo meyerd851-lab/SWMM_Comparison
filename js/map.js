@@ -1,9 +1,9 @@
-// map.js - Map functionality (Leaflet, geometry drawing, labels, popups, highlighting)
+// map.js — Leaflet map, geometry drawing, labels, popups, highlighting
 import { state } from './state.js';
 import { escapeHtml, throttle, relabelHeaders } from './utils.js';
 import { ShapeMarker } from './ShapeMarker.js';
 
-// Map initialization
+
 export const map = L.map('map', { zoomControl: true, maxZoom: 22, renderer: L.canvas() }).setView([39.1031, -84.5120], 12);
 
 // Create panes to control rendering order (subs < links < nodes)
@@ -12,13 +12,13 @@ map.createPane('linkPane').style.zIndex = 390;
 map.createPane('nodePane').style.zIndex = 410;
 map.createPane('selectPane').style.zIndex = 420; // Above nodes
 
-// Create Renderers to enforce Canvas usage
+
 const subRenderer = L.canvas({ pane: 'subcatchmentPane' });
 const linkRenderer = L.canvas({ pane: 'linkPane' });
 const nodeRenderer = L.canvas({ pane: 'nodePane' });
 const selectRenderer = L.canvas({ pane: 'selectPane' });
 
-// Basemap layers
+
 const baseLayers = {
   "Street": L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     attribution: "&copy; OpenStreetMap"
@@ -29,19 +29,19 @@ const baseLayers = {
   "None": L.tileLayer('', { opacity: 0 })
 };
 
-// Default basemap
+
 baseLayers["Street"].addTo(map);
 
 export function setBasemap(which) {
   // Compatibility stub
 }
 
-// Add legend control container
+
 const legendControl = L.Control.extend({
   onAdd: function () {
     const lg = L.DomUtil.create('div', 'map-legend legend leaflet-control');
     lg.id = 'map-legend';
-    // Initial content
+
     lg.innerHTML = '<div style="font-weight:700; margin-bottom:8px;">Legend</div>';
     return lg;
   }
@@ -49,7 +49,7 @@ const legendControl = L.Control.extend({
 map.addControl(new legendControl({ position: "bottomleft" }));
 
 
-// Layer groups
+
 const overlayGroups = {
   nodes: L.layerGroup().addTo(map),
   links: L.layerGroup().addTo(map),
@@ -68,8 +68,7 @@ export const C = { unchanged: "#9ca3af", changed: "#f59e0b", added: "#10b981", r
 // --- COORDINATE & GEOMETRY HELPERS ---
 
 export function xyToLatLng(x, y) {
-  // Use projection from state, default to EPSG:4326 if not set (or if raw coords)
-  // Assuming projections are handled by proj4 if loaded
+  // Project XY from current CRS to WGS84 via proj4
   if (state.CURRENT_CRS && state.CURRENT_CRS !== "EPSG:4326" && window.proj4) {
     try {
       const [lon, lat] = proj4(state.CURRENT_CRS, "EPSG:4326", [x, y]);
@@ -111,8 +110,7 @@ function midOfLine(coords) {
 
 function centroidOfPoly(coords) {
   if (!coords || coords.length === 0) return null;
-  // Handle MultiPolygon (list of rings)
-  // If first item is array, it's a ring.
+  // Handle nested rings (MultiPolygon)
   let points = [];
   if (Array.isArray(coords[0]) && Array.isArray(coords[0][0])) {
     // Flatten
@@ -129,20 +127,12 @@ function centroidOfPoly(coords) {
 }
 
 function isPointInPoly(pt, poly) {
-  // poly can be LatLng[] (single ring) or LatLng[][] (multi ring / holes)
-  // L.Polygon.getLatLngs() usually returns:
-  // - [LatLng, LatLng...] for simple polygon (Passed as [pts] to constructor)
-  // - [[LatLng...], [LatLng...]] for multipolygon/holes
-  // BUT Leaflet normalizes simple polygons to [ [LatLng...] ] sometimes?
-  // Let's iterate all rings.
+  // poly can be LatLng[] (single ring) or LatLng[][] (multi-ring)
+  // Leaflet normalizes simple polygons to [[LatLng...]] in some cases
 
   let rings = [];
   if (poly.length > 0 && Array.isArray(poly[0])) {
-    // It is likely a list of rings (or points? LatLng is object, not array).
-    // LatLng is {lat, lng}, not array.
-    // So if poly[0] is array, it's list of rings.
-    // If poly[0] is LatLng (object), it's single ring (Legacy Leaflet structure).
-    // Wait, checks:
+
     if ('lat' in poly[0]) {
       rings = [poly];
     } else {
@@ -153,13 +143,7 @@ function isPointInPoly(pt, poly) {
   }
 
   let inside = false;
-
-  // Ray casting algorithm check
-  // For MultiPolygon, odd total crossings = inside? 
-  // Or Check if inside Any outer ring and outside Any hole?
-  // SWMM "Segmented Polygons" are usually disjoint islands (MultiPolygon), not holes.
-  // So standard even-odd rule for all rings effectively unions them if they are disjoint.
-
+  // Ray casting (even-odd rule). SWMM polygons are typically disjoint islands.
   let x = pt.lat, y = pt.lng;
 
   for (const ring of rings) {
@@ -259,25 +243,19 @@ export function buildSets(diffs, renames, geometryChanges) {
   return sets;
 }
 
-// --- DRAWING & LABELS ---
 
-// --- DRAWING & LABELS ---
 
 const labelsLayer = L.layerGroup().addTo(map);
 const LABEL_ZOOM_THRESHOLD = 16; // Slightly lowered threshold
 
 // Helper for label collision
 function getLabelBbox(point, text, type) {
-  // Approximate sizes:
-  // Font ~12px? Width approx 7px per char?
+  // Approximate char metrics for collision detection
   const charWidth = 7;
   const padding = 24; // Increased from 8 to 30 for less clutter
   const height = 18;
   const width = (text.length * charWidth) + padding;
 
-  // Point is the anchor.
-  // If direction is 'top' (nodes), anchor is bottom-center of box.
-  // If direction is 'center' (links/subs), anchor is center-center of box.
 
   let x = point.x - (width / 2);
   let y = point.y;
@@ -313,10 +291,9 @@ export function drawLabels(json) {
   // Collision Registry
   const drawnBoxes = [];
 
-  // Priorities: Nodes > Subs > Links? Or Subs > Nodes? 
-  // Let's do Nodes -> Subs -> Links.
+  // Draw order: Nodes > Subs > Links
 
-  // Filter Logic
+
   let validNodes = null, validSubs = null, validLinks = null;
   if (currentFilterMode !== 'Default') {
     const sets = buildSets(json.diffs, json.renames, json.geometry_changes);
@@ -329,7 +306,6 @@ export function drawLabels(json) {
   // --- DRAW NODES ---
   if (showNodes) {
     const nodeKeys = Object.keys(geom.nodes2 || {}).concat(Object.keys(geom.nodes1 || {}));
-    // Dedup
     const unique = new Set(nodeKeys);
     unique.forEach(id => {
       if (validNodes && !validNodes.has(id)) return;
@@ -340,7 +316,7 @@ export function drawLabels(json) {
         const pt = map.latLngToContainerPoint(ll);
         const bbox = getLabelBbox(pt, id, 'node');
 
-        // Check collision
+
         let hit = false;
         for (const b of drawnBoxes) {
           if (isOverlapping(bbox, b)) { hit = true; break; }
@@ -465,7 +441,6 @@ export function drawGeometry(json) {
     if (sourceNum === 1) sec = idToSec1[id];
     else if (sourceNum === 2) sec = idToSec2[id];
 
-    // Fallback? Should exist if valid ID.
     if (!sec) sec = (idToSec1[id] || idToSec2[id] || "JUNCTIONS");
 
     let shape = 'circle';
@@ -800,7 +775,7 @@ function showMapPopup(clickLatlng, elements, isNewClick = true) {
   highlightElement(section, id, false, isRemoved);
 }
 
-// Updated: Pixel-based selection with Conduit Trimming and Explicit Priority
+// Pixel-based map click selection with conduit trimming and priority ordering
 function findNearbyElements(latlng) {
   const nodes = [];
   const links = [];
@@ -837,7 +812,7 @@ function findNearbyElements(latlng) {
   return [...nodes, ...links, ...subs];
 }
 
-// Fast check for cursor hover
+
 function hasHoverElement(latlng) {
   const P = map.latLngToContainerPoint(latlng);
   const LINK_TOLERANCE_PX = 10;

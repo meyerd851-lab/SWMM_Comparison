@@ -1,8 +1,8 @@
-// Utility functions
+// utils.js — Pure helper functions (no side effects, no DOM access)
 
 export function throttle(func, limit) {
   let inThrottle;
-  return function() {
+  return function () {
     const args = arguments;
     const context = this;
     if (!inThrottle) {

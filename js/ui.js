@@ -1,15 +1,11 @@
-// ==============================================================================
-// UI.JS - USER INTERFACE INTERACTIONS
-// ==============================================================================
+// ui.js — UI interactions, modals, session management, export
 
 import { state } from './state.js';
 import { abToB64, b64ToAb, escapeHtml, relabelHeaders } from './utils.js';
 import { renderSections } from './table.js';
 import { drawGeometry } from './map.js';
 
-// ==============================================================================
-// SECTION 1: GLOBAL HELPERS & STATE SETTERS
-// ==============================================================================
+// --- Module-scoped state & helpers ---
 
 let setStatusCallback = null;
 export function setSetStatusCallback(callback) {
@@ -39,9 +35,7 @@ export function setWorker(worker) {
   workerRef = worker;
 }
 
-// ==============================================================================
-// SECTION 2: RESIZABLE PANELS
-// ==============================================================================
+// --- Resizable panels ---
 
 export function makeResizable() {
   const mapSplitter = document.getElementById('map-v-splitter');
@@ -85,9 +79,7 @@ export function makeResizable() {
   });
 }
 
-// ==============================================================================
-// SECTION 3: MODAL MANAGEMENT
-// ==============================================================================
+// --- Modal management ---
 
 export function openHelpModal() {
   const el = document.getElementById('helpModalBackdrop');
@@ -111,7 +103,7 @@ export function closeCompareModal() {
   setTimeout(() => { if (!el.classList.contains('open')) el.style.display = 'none'; }, 200);
 }
 
-// Tolerance Toggle
+
 const diffToggle = document.getElementById('toggleTolerances');
 if (diffToggle) {
   diffToggle.onclick = () => {
@@ -133,7 +125,7 @@ document.querySelectorAll('.menu').forEach(menu => {
   if (btn) {
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
-      // Close other menus if any
+
       document.querySelectorAll('.menu.open').forEach(m => {
         if (m !== menu) m.classList.remove('open');
       });
@@ -142,7 +134,7 @@ document.querySelectorAll('.menu').forEach(menu => {
   }
 });
 
-// Close menu when clicking outside
+
 window.addEventListener('click', (e) => {
   document.querySelectorAll('.menu.open').forEach(menu => {
     if (!menu.contains(e.target)) {
@@ -151,9 +143,7 @@ window.addEventListener('click', (e) => {
   });
 });
 
-// ==============================================================================
-// SECTION 6: DETAIL VIEW
-// ==============================================================================
+// --- Detail view ---
 
 export function openDetail(section, id) {
   const { diffs, headers, renames, hydrographs } = state.LAST.json || {};
@@ -163,7 +153,7 @@ export function openDetail(section, id) {
   const grid = document.getElementById('modalGrid');
   const onlyChangedBox = document.getElementById('onlyChangedBox');
 
-  // Helper for formatting
+
   const fmtNum = (x) => {
     const v = Number(x);
     if (!isFinite(v)) return (x && x !== "") ? escapeHtml(x) : "—";
@@ -290,7 +280,7 @@ export function openDetail(section, id) {
     if (!newData) badge = 'Removed';
     metaEl.innerHTML = `<span class="badge ${badge.toLowerCase()}">${badge}</span>`;
 
-    // Render Table
+
     const allRows = Math.max(pts1.length, pts2.length);
     let rowsHTML = "";
 
@@ -326,7 +316,7 @@ export function openDetail(section, id) {
 
     grid.appendChild(tbl);
 
-    // Setup modal
+
     document.getElementById('modalBackdrop').classList.add('open');
     document.getElementById('modalBackdrop').style.display = 'flex';
     return;
@@ -341,7 +331,7 @@ export function openDetail(section, id) {
     grid.style.background = 'transparent';
 
     const dDiff = diffs?.[section] || {};
-    // Determine data based on change type
+
     let oldData = null, newData = null;
 
     if (d.added && d.added[id]) {
@@ -349,16 +339,13 @@ export function openDetail(section, id) {
     } else if (d.removed && d.removed[id]) {
       oldData = d.removed[id];
     } else if (d.changed && d.changed[id]) {
-      // changed[id] is [old_list, new_list] OR {values: [old, new], ...} ??
-      // core_web.py returns simple tuple/list [old, new] for changed items usually.
-      // But let's check how we access it below... 
-      // Logic below: oldArr = Array.isArray(changedObj) ? changedObj[0] : ...
+
       const cObj = d.changed[id];
       oldData = Array.isArray(cObj) ? cObj[0] : (cObj?.values?.[0] || []);
       newData = Array.isArray(cObj) ? cObj[1] : (cObj?.values?.[1] || []);
     }
 
-    // Helper to parse
+
     const parseCurve = (arr) => {
       if (!arr || arr.length < 2) return { type: "—", points: [] };
       try {
@@ -369,7 +356,7 @@ export function openDetail(section, id) {
     const c1 = parseCurve(oldData);
     const c2 = parseCurve(newData);
 
-    // Meta info
+
     let metaHTML = ``;
     if (c1.type !== c2.type && c1.type !== "—" && c2.type !== "—") {
       metaHTML += `<div style="margin-top:8px"><strong>Type:</strong> <span style="text-decoration:line-through;opacity:0.6">${escapeHtml(c1.type)}</span> → <span style="color:var(--changed)">${escapeHtml(c2.type)}</span></div>`;
@@ -377,19 +364,16 @@ export function openDetail(section, id) {
       metaHTML += `<div style="margin-top:8px"><strong>Type:</strong> ${escapeHtml(c2.type !== "—" ? c2.type : c1.type)}</div>`;
     }
 
-    // Status Badge
+
     let badge = 'Changed';
     if (!oldData) badge = 'Added';
     if (!newData) badge = 'Removed';
     metaEl.innerHTML = `<span class="badge ${badge.toLowerCase()}">${badge}</span>` + metaHTML;
 
 
-    // Render Table Comparison
-    // We'll align points by index? Or just show side-by-side lists?
-    // Since X values might change, index alignment is fragile but okay for simple diffs.
-    // Let's rely on X-value matching? No, simple index alignment is safest for now.
 
-    // Merge list length
+
+
     const len = Math.max(c1.points.length, c2.points.length);
 
     const tbl = document.createElement("table");
@@ -476,7 +460,7 @@ export function openDetail(section, id) {
       newData = pair[1] || [];
     }
 
-    // Helper to safe-get
+
     const getData = (arr) => {
       if (!arr || arr.length < 9) return {
         nc: ["-", "-", "-"],
@@ -494,7 +478,7 @@ export function openDetail(section, id) {
     const d1 = getData(oldData);
     const d2 = getData(newData);
 
-    // Render helpers
+
     const renderRow = (label, v1, v2) => {
       const isDiff = v1 !== v2 && v1 !== "-" && v2 !== "-";
       const c1 = isDiff ? `<span style="text-decoration:line-through; opacity:0.6">${escapeHtml(v1)}</span>` : escapeHtml(v1);
@@ -578,7 +562,7 @@ export function openDetail(section, id) {
 
     grid.innerHTML = propsHTML + grHTML;
 
-    // Meta badge
+
     let badge = 'Changed';
     if (!oldData.length) badge = 'Added';
     if (!newData.length) badge = 'Removed';
@@ -590,7 +574,6 @@ export function openDetail(section, id) {
   }
 
   // --- PATTERNS ---
-  // --- PATTERNS ---
   if (section === "PATTERNS") {
     grid.innerHTML = '';
     grid.style.display = 'block';
@@ -599,19 +582,19 @@ export function openDetail(section, id) {
     let oldData = null;
     let newData = null;
 
-    // Find the data
+
     if (d.added && d.added[id]) {
       newData = d.added[id];
     } else if (d.removed && d.removed[id]) {
       oldData = d.removed[id];
     } else if (d.changed && d.changed[id]) {
       const cObj = d.changed[id];
-      // Changed is usually [[Type, OldJSON], [Type, NewJSON]]
+
       oldData = Array.isArray(cObj) ? cObj[0] : (cObj?.values?.[0] || []);
       newData = Array.isArray(cObj) ? cObj[1] : (cObj?.values?.[1] || []);
     }
 
-    // Helper: { type, values[] }
+
     const parsePattern = (arr) => {
       if (!arr || arr.length < 2) return { type: "—", values: [] };
       try { return { type: arr[0], values: JSON.parse(arr[1]) }; }
@@ -621,7 +604,7 @@ export function openDetail(section, id) {
     const p1 = parsePattern(oldData);
     const p2 = parsePattern(newData);
 
-    // Meta
+
     let metaHTML = ``;
     if (p1.type !== p2.type && p1.type !== "—" && p2.type !== "—") {
       metaHTML += `<div style="margin-top:8px"><strong>Type:</strong> <span style="text-decoration:line-through;opacity:0.6">${escapeHtml(p1.type)}</span> → <span style="color:var(--changed)">${escapeHtml(p2.type)}</span></div>`;
@@ -634,11 +617,11 @@ export function openDetail(section, id) {
     if (!newData) badge = 'Removed';
     metaEl.innerHTML = `<span class="badge ${badge.toLowerCase()}">${badge}</span>` + metaHTML;
 
-    // Table
+
     const len = Math.max(p1.values.length, p2.values.length);
     const type = p2.type !== "—" ? p2.type : p1.type;
 
-    // Generate labels based on type
+
     const getLabel = (i) => {
       if (type === "MONTHLY") {
         const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -709,7 +692,6 @@ export function openDetail(section, id) {
 
     document.getElementById('modalBackdrop').classList.add('open');
     document.getElementById('modalBackdrop').style.display = 'flex';
-    document.getElementById('modalBackdrop').style.display = 'flex';
     return;
   }
 
@@ -725,13 +707,13 @@ export function openDetail(section, id) {
     else if (d.removed && d.removed[id]) oldData = d.removed[id];
     else if (d.changed && d.changed[id]) {
       const cObj = d.changed[id];
-      // Check if wrapped in {values: ...} or direct array
+
       const pair = (cObj && cObj.values) ? cObj.values : cObj;
       oldData = pair[0];
       newData = pair[1];
     }
 
-    // Helper to parse [Type, Data]
+
     const parseTS = (arr) => {
       if (!arr || arr.length < 2) return { type: "—", data: [] };
       if (arr[0] === "External") return { type: "External", file: arr[1], data: [] };
@@ -743,7 +725,7 @@ export function openDetail(section, id) {
     const t1 = parseTS(oldData);
     const t2 = parseTS(newData);
 
-    // Meta Info
+
     let metaHTML = ``;
     if (t1.type !== t2.type && t1.type !== "—" && t2.type !== "—") {
       metaHTML += `<div style="margin-top:8px"><strong>Type:</strong> <span style="text-decoration:line-through;opacity:0.6">${escapeHtml(t1.type)}</span> → <span style="color:var(--changed)">${escapeHtml(t2.type)}</span></div>`;
@@ -764,7 +746,7 @@ export function openDetail(section, id) {
     if (!newData) badge = 'Removed';
     metaEl.innerHTML = `<span class="badge ${badge.toLowerCase()}">${badge}</span>` + metaHTML;
 
-    // If External, we stop here (no table)
+
     if (t2.type === "External" || (t1.type === "External" && !t2.type)) {
       grid.appendChild(document.createElement("div"));
       document.getElementById('modalBackdrop').classList.add('open');
@@ -772,7 +754,7 @@ export function openDetail(section, id) {
       return;
     }
 
-    // Render Table for Inline
+
     const len = Math.max(t1.data.length, t2.data.length);
     const tbl = document.createElement("table");
     tbl.className = "data-table";
@@ -929,9 +911,7 @@ export function updateFileName(inputId, spanId) {
   input.addEventListener('change', () => span.textContent = input.files[0]?.name || 'No file selected');
 }
 
-// ==============================================================================
-// SECTION 4: SESSION MANAGEMENT
-// ==============================================================================
+// --- Session management ---
 
 export async function saveSession() {
   if (!state.LAST.json) { alert("Run a comparison first."); return; }
@@ -1032,9 +1012,7 @@ export async function loadSession(file) {
   } catch (e) { console.error(e); alert("Load failed: " + e.message); }
 }
 
-// ==============================================================================
-// SECTION 5: EXCEL EXPORT
-// ==============================================================================
+// --- Excel export ---
 
 export async function exportToExcel() {
   if (!state.LAST.json) { alert("Please run a comparison first."); return; }
@@ -1087,7 +1065,7 @@ export async function exportToExcel() {
   };
 
   for (const sec of Object.keys(diffs).sort()) {
-    // Check for warnings
+
     if (warnings && warnings[sec]) {
       const ws = XLSX.utils.aoa_to_sheet([["⚠️ Cannot Compare Section"], [warnings[sec]]]);
       const sheetName = sec.replace(/[:\\/?*[\]]/g, "").substring(0, 31);
@@ -1124,7 +1102,7 @@ export async function exportToExcel() {
 
       rows.forEach(r => {
         const row = [r.type, r.hydro, r.month, r.response];
-        // For remaining 7 params (R...Dinit...RainGage)
+
         for (let i = 0; i < 7; i++) {
           const ov = r.valsOld[i] || "";
           const nv = r.valsNew[i] || "";
@@ -1138,7 +1116,7 @@ export async function exportToExcel() {
     } else {
       hdrs = relabelHeaders(sec, hdrs);
 
-      // Inject Diff Headers
+
       const diffHeaders = [];
       if (sec === 'CONDUITS') {
         diffHeaders.push('Δ Length', 'Δ InOffset', 'Δ OutOffset');
@@ -1173,7 +1151,7 @@ export async function exportToExcel() {
           else row.push(ov === nv ? nv : `${ov} -> ${nv}`);
         }
 
-        // Append Diff Values
+
         if (sec === 'CONDUITS') {
           row.push(r.diffs?.Length ?? "");
           row.push(r.diffs?.InOffset ?? "");
@@ -1189,7 +1167,7 @@ export async function exportToExcel() {
 
     const ws = XLSX.utils.aoa_to_sheet(sheetData);
 
-    // Auto-filter
+
     if (sheetData.length > 0) {
       const range = XLSX.utils.decode_range(ws['!ref']);
       ws['!autofilter'] = { ref: XLSX.utils.encode_range(range) };
@@ -1234,7 +1212,7 @@ export async function exportToExcel() {
   setStatus("Excel file generated.");
 }
 
-// Shapefile export
+// --- Shapefile export ---
 export async function exportToShapefile() {
   if (!state.LAST.json) { alert("Please run a comparison first."); return; }
   setStatus("Requesting Shapefile generation...");

@@ -1,22 +1,4 @@
-# core_web.py
-# ==============================================================================
-# SWMM COMPARISON TOOL - CORE LOGIC
-# ==============================================================================
-# This module contains the core logic for parsing, analyzing, and comparing
-# SWMM (Storm Water Management Model) INP files.
-#
-# It is designed to be run in a web browser environment (via Pyodide) or
-# locally for testing.
-#
-# KEY SECTIONS:
-# 1. Imports and Constants
-# 2. INP Parsing Logic (reading the text file)
-# 3. Geometry Parsing (extracting coordinates)
-# 4. Spatial Analysis (calculating distances, areas)
-# 5. Renaming Logic (matching elements between files)
-# 6. Comparison Logic (finding differences)
-# 7. Public API (entry point for the UI)
-# ==============================================================================
+# core_web.py — SWMM INP parser, diff engine, rename heuristics, shapefile export
 
 from __future__ import annotations
 import io, re, json, math
@@ -26,12 +8,7 @@ from collections import defaultdict
 import zipfile
 import shapefile
 
-# ------------------------------------------------------------------------------
-# SECTION 1: CONSTANTS
-# ------------------------------------------------------------------------------
-# Default Coordinate Reference System (CRS) for the map visualization.
-# EPSG:3735 is a specific projection (State Plane Ohio South), but the app
-# uses proj4js to reproject this to Web Mercator for the map.
+# --- Constants ---
 MAP_SOURCE_CRS = "EPSG:3735"  # raw XY (feet); project in JS with proj4
 
 SECTION_HEADERS = {
@@ -497,18 +474,7 @@ SECTION_HEADERS = {
     ],
 }
 
-# ==============================================================================
-# SECTION 2: INP PARSING LOGIC
-# ==============================================================================
-# The following classes and functions are responsible for reading the raw text
-# of an INP file and converting it into a structured dictionary.
-#
-# The SWMM INP format is section-based, with headers in brackets like [JUNCTIONS].
-# ------------------------------------------------------------------------------
-
-# =========================
-# Parsing
-# =========================
+# --- INP Parsing ---
 @dataclass
 class INPParseResult:
     """
@@ -541,20 +507,7 @@ def _parse_inp_iter(lines) -> INPParseResult:
     tags: Dict[str, str] = {}
     descriptions: Dict[str, str] = {}
 
-    # Temporary storage for accumulators (CURVES, VERTICES, POLYGONS)
-    # Map: Section -> ID -> { ...temp data... } or List
-    # For CURVES: ID -> {type, points}
-    # For others: Section -> ID -> List[Points]
-    # We will use 'temp_curves' as a generic holder or just use separate dicts?
-    # Actually, let's keep 'temp_curves' for CURVES specifically to avoid breaking existing logic logic,
-    # but I reused it in the chunks above. Let's align.
-    # In the chunk above I used temp_curves[current] which implies temp_curves is Dict[Section, Dict[ID, Data]]
-    # BUT currently temp_curves is Dict[ID, Dict]. 
-    # I need to refactor temp_curves to be section-aware or add new accumulators.
-    
-    # REFACTOR:
-    # temp_curves: Dict[str, Dict] (ID -> Data) for CURVES only
-    # temp_points: Dict[str, Dict[str, List]] (Section -> ID -> List[(x,y)])
+    # Accumulators for multi-line sections
     temp_curves: Dict[str, Dict] = {} 
     temp_points: Dict[str, Dict[str, List]] = defaultdict(lambda: defaultdict(list))
     temp_patterns: Dict[str, Dict] = {} # Accumulator for Patterns: ID -> {type: "", values: []}
@@ -991,16 +944,7 @@ def _parse_inp_iter(lines) -> INPParseResult:
 
 
 
-# ==============================================================================
-# SECTION 3: GEOMETRY PARSING
-# ==============================================================================
-# These functions handle the extraction of spatial data (coordinates) from the
-# [COORDINATES], [VERTICES], and [POLYGONS] sections.
-# ------------------------------------------------------------------------------
-
-# =========================
-# Geometry (raw XY in feet; project in JS)
-# =========================
+# --- Geometry Parsing (raw XY; projected in JS via proj4) ---
 @dataclass
 class SWMMGeometry:
     nodes: Dict[str, Tuple[float, float]]          # node -> (x, y)
@@ -1090,17 +1034,7 @@ def _parse_geom_iter(lines) -> SWMMGeometry:
 
 
 
-# ==============================================================================
-# SECTION 4: SPATIAL ANALYSIS HELPERS
-# ==============================================================================
-# These helper functions perform geometric calculations like distance, length,
-# and area. They are used primarily for the "Renaming Logic" to match elements
-# that might have changed names but are in the same location.
-# ------------------------------------------------------------------------------
-
-# =========================
-# Spatial helpers (planar XY in feet → meters)
-# =========================
+# --- Spatial helpers (planar XY in feet → meters) ---
 _FEET_TO_M = 0.3048
 
 def _dist_m_xy(p1: Tuple[float, float], p2: Tuple[float, float]) -> float:
@@ -1161,17 +1095,7 @@ def _ratio_close(a: float, b: float, tol=0.10) -> bool:
     r = a / b
     return (1 - tol) <= r <= (1 + tol)
 
-# ==============================================================================
-# SECTION 5: RENAMING LOGIC (HEURISTICS)
-# ==============================================================================
-#
-# Uses spatial proximity (location) and attribute similarity to guess if
-# "Node A" in File 1 is actually "Node B" in File 2.
-# ------------------------------------------------------------------------------
-
-# =========================
-# Rename proposals (using XY)
-# =========================
+# --- Rename heuristics (spatial proximity + attribute similarity) ---
 
 class SpatialIndex:
     """
@@ -1536,17 +1460,7 @@ def spatial_reconcile_and_remap_using_geom(pr1: INPParseResult, pr2: INPParseRes
 
     return by_sec
 
-# ==============================================================================
-# SECTION 6: COMPARISON LOGIC
-# ==============================================================================
-# This section contains the core logic for comparing two parsed INP files.
-# It identifies added, removed, and changed elements, and calculates specific
-# numerical differences.
-# ------------------------------------------------------------------------------
-
-# =========================
-# Comparison
-# =========================
+# --- Comparison Logic ---
 @dataclass
 class DiffSection:
     """
@@ -1809,16 +1723,7 @@ def _filter_changes_by_tolerance(diffs: Dict[str, DiffSection], tolerances: Dict
         if ids_to_remove:
             print(f"[DEBUG] [{sec}]: Removed {len(ids_to_remove)} item(s) that were within tolerance.")
 
-# ==============================================================================
-# SECTION 7: PUBLIC API (WEB WORKER ENTRYPOINT)
-# ==============================================================================
-# This is the main function called by the JavaScript frontend (via Pyodide).
-# It orchestrates the entire comparison process.
-# ------------------------------------------------------------------------------
-
-# =========================
-# Public entrypoint for the web worker
-# =========================
+# --- Public API (web worker entrypoint) ---
 def run_compare(file1_bytes, file2_bytes, tolerances_py=None, progress_callback=None) -> str:
     """
     Main entry point for the comparison logic.
@@ -2122,14 +2027,7 @@ def _to_text_io(payload) -> io.StringIO:
     return io.StringIO(data.decode("utf-8", "ignore"))
 
 
-# ==============================================================================
-# SECTION 8: SHAPEFILE EXPORT
-# ==============================================================================
-# Logic to generate a ZIP file containing Shapefiles for Nodes, Links, and Subcatchments.
-# ------------------------------------------------------------------------------
-
-import zipfile
-import shapefile
+# --- Shapefile Export ---
 
 # WKT Definitions for supported CRS
 CRS_WKT = {

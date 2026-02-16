@@ -1,4 +1,4 @@
-// table.js - Table rendering and section management
+// table.js — Section sidebar and data table rendering
 import { state } from './state.js';
 import { escapeHtml, relabelHeaders } from './utils.js';
 import { highlightElement } from './map.js';
@@ -65,7 +65,7 @@ export function renderSections(json) {
 
   cont.innerHTML = "";
 
-  // Helper to create a section item element
+
   const createSecItem = (sec) => {
     const d = diffs[sec];
     if (!d) return null; // Should not happen if we iterate diffs keys, but safe for fixed lists
@@ -94,7 +94,7 @@ export function renderSections(json) {
     return div;
   };
 
-  // Helper to render a group
+
   const renderGroup = (name, sections, defaultOpen = true) => {
     if (!sections || sections.length === 0) return;
 
@@ -114,7 +114,7 @@ export function renderSections(json) {
       if (item) groupDiv.appendChild(item);
     });
 
-    // Toggle Logic
+
     header.onclick = () => {
       const isOpen = groupDiv.style.display !== 'none';
       if (isOpen) {
@@ -375,7 +375,7 @@ export function renderTableFor(sec) {
 
     // Build rows from Diff
     const rows = [];
-    // Helper to process entries
+
     const processEntry = (type, id, values) => {
       // values = [Type, JSON_Data]
       const pType = values[0] || "";

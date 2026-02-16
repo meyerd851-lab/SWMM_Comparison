@@ -1,12 +1,4 @@
-// ==============================================================================
-// APP.JS - MAIN APPLICATION CONTROLLER
-// ==============================================================================
-// This file acts as the "brain" of the frontend application. It coordinates:
-// 1. Initialization (setting up the map, worker, etc.)
-// 2. Worker Communication (sending files to the background thread for processing)
-// 3. Event Handling (responding to button clicks, file uploads)
-// 4. UI Updates (displaying status messages)
-// ==============================================================================
+// app.js — Main application controller
 
 import { state } from './state.js';
 import { renderSections } from './table.js';
@@ -14,22 +6,15 @@ import { drawGeometry } from './map.js';
 import { makeResizable, openHelpModal, closeHelpModal, saveSession, loadSession, exportToExcel, exportToShapefile, openDetail, closeModal, updateFileName, openCompareModal, closeCompareModal, setWorker, setSetStatusCallback, initTheme, toggleTheme } from './ui.js';
 import { setOpenDetailCallback } from './table.js';
 
-// ==============================================================================
-// SECTION 1: INITIALIZATION
-// ==============================================================================
+// --- Initialization ---
 
-// Initialize proj4 with default CRS
+
 proj4.defs(state.CURRENT_CRS, state.PROJECTIONS[state.CURRENT_CRS]);
 
-// ==============================================================================
-// SECTION 2: WEB WORKER SETUP
-// ==============================================================================
-// The heavy lifting (parsing and comparing INP files) is done in a separate
-// background thread (Web Worker) to keep the UI responsive.
-// ------------------------------------------------------------------------------
+// --- Worker setup ---
 
-// Worker setup
-const worker = new Worker("worker.js");
+
+const worker = new Worker("worker/worker.js");
 setWorker(worker);
 
 function setStatus(s) {
@@ -38,7 +23,7 @@ function setStatus(s) {
 setSetStatusCallback(setStatus);
 initTheme();
 
-// Handle messages received FROM the worker
+
 worker.onmessage = (ev) => {
   const { type, payload, error } = ev.data || {};
   if (type === "ready") {
@@ -87,26 +72,21 @@ worker.onmessage = (ev) => {
     }
   }
 };
-// Send initialization message to worker
+
 worker.postMessage({ type: "init" });
 
-// ==============================================================================
-// SECTION 3: UI EVENT LISTENERS
-// ==============================================================================
-// These listeners handle user interactions like clicking buttons or selecting files.
-// ------------------------------------------------------------------------------
+// --- UI event listeners ---
 
-// Set up openDetail callback for table.js
+
 setOpenDetailCallback(openDetail);
 
-// File input handlers
 updateFileName('f1', 'f1-name');
 updateFileName('f2', 'f2-name');
 
-// Compare button
+
 document.getElementById('go').addEventListener('click', openCompareModal);
 
-// Run comparison from modal
+
 document.getElementById('runCompareFromModal').addEventListener('click', async () => {
   const f1 = document.getElementById('f1').files?.[0];
   const f2 = document.getElementById('f2').files?.[0];
@@ -134,7 +114,7 @@ document.getElementById('runCompareFromModal').addEventListener('click', async (
   closeCompareModal();
 });
 
-// Session management
+
 document.getElementById('saveSess').addEventListener('click', saveSession);
 document.getElementById('loadSessBtn').addEventListener('click', () => document.getElementById('loadSessInput').click());
 document.getElementById('loadSessInput').addEventListener('change', (ev) => {
@@ -142,20 +122,19 @@ document.getElementById('loadSessInput').addEventListener('change', (ev) => {
   if (f) loadSession(f);
 });
 
-// Excel export
+
 document.getElementById('exportXlsx').addEventListener('click', exportToExcel);
 document.getElementById('exportShp').addEventListener('click', exportToShapefile);
 
-// Help button
+
 document.getElementById('helpBtn').addEventListener('click', openHelpModal);
 document.getElementById('themeBtn').addEventListener('click', toggleTheme);
 
-// Modal close handlers
+// Expose modal close handlers to onclick attributes in HTML
 window.closeModal = closeModal;
 window.closeHelpModal = closeHelpModal;
 window.closeCompareModal = closeCompareModal;
 
 
-// Initialize resizable panels
 document.addEventListener('DOMContentLoaded', makeResizable);
 

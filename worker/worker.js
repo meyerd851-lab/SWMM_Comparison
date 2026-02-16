@@ -1,4 +1,4 @@
-// worker.js
+// worker.js — WebWorker: loads Pyodide, runs INP comparison and shapefile export
 let pyodide, core;
 
 self.onmessage = async (ev) => {
@@ -10,7 +10,7 @@ self.onmessage = async (ev) => {
         importScripts("https://cdn.jsdelivr.net/pyodide/v0.25.1/full/pyodide.js");
         pyodide = await loadPyodide({ indexURL: "https://cdn.jsdelivr.net/pyodide/v0.25.1/full/" });
 
-        // Fetch your local module and write it to the Pyodide FS
+
         self.postMessage({ type: "progress", payload: "Loading…" });
         const src = await (await fetch("./core_web.py", { cache: "no-store" })).text();
         pyodide.FS.writeFile("core_web.py", src);
@@ -19,7 +19,7 @@ self.onmessage = async (ev) => {
         const shpSrc = await (await fetch("./shapefile.py", { cache: "no-store" })).text();
         pyodide.FS.writeFile("shapefile.py", shpSrc);
 
-        // Import the module
+
         core = pyodide.pyimport("core_web");
       }
       self.postMessage({ type: "ready" });
@@ -76,7 +76,7 @@ self.onmessage = async (ev) => {
       return;
     }
   } catch (err) {
-    // Show nice error
+
     const text = (err && err.message) ? err.message : String(err);
     self.postMessage({ type: "error", error: text });
   }
