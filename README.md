@@ -134,3 +134,12 @@ python -m http.server 8001
 ```
 
 Then open `http://localhost:8001` in a modern browser.
+
+## Disclaimer
+
+This is a personal project and is not an official Wade Trim tool.
+It is provided as-is, without warranty or support.
+
+Users are responsible for independently verifying results before
+using them for engineering or QA/QC purposes.
+``
