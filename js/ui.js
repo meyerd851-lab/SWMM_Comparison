@@ -714,6 +714,7 @@ export function openDetail(section, id) {
 
   // --- PATTERNS ---
   if (section === "PATTERNS") {
+    titleEl.textContent = `PATTERN · ${id}`;
     grid.innerHTML = '';
     grid.style.display = 'block';
 
@@ -836,6 +837,7 @@ export function openDetail(section, id) {
 
   // --- TIMESERIES ---
   if (section === "TIMESERIES") {
+    titleEl.textContent = `TIMESERIES · ${id}`;
     grid.innerHTML = '';
     grid.style.display = 'block';
 
