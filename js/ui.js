@@ -1057,6 +1057,21 @@ export function updateFileName(inputId, spanId) {
 export async function saveSession() {
   if (!state.LAST.json) { alert("Run a comparison first."); return; }
 
+  const f1Name = state.FILES.f1Name || "file1";
+  const f2Name = state.FILES.f2Name || "file2";
+  const defaultName = `${f1Name}_vs_${f2Name}.sca`;
+
+  let handle = null;
+  if (window.showSaveFilePicker) {
+    try {
+      handle = await window.showSaveFilePicker({ suggestedName: defaultName, types: [{ description: 'SWMM Comparison Session', accept: { 'application/json': ['.sca'] } }] });
+    } catch (err) {
+      if (err.name !== 'AbortError') console.error("Save failed:", err);
+      return;
+    }
+  }
+
+  // Now build the (potentially large) session payload
   const session = {
     version: state.SESSION_VERSION,
     createdUtc: new Date().toISOString(),
@@ -1085,18 +1100,14 @@ export async function saveSession() {
   };
 
   const blob = new Blob([JSON.stringify(session, null, 2)], { type: "application/json" });
-  const f1Name = state.FILES.f1Name || "file1";
-  const f2Name = state.FILES.f2Name || "file2";
-  const defaultName = `${f1Name}_vs_${f2Name}.sca`;
 
-  if (window.showSaveFilePicker) {
+  if (handle) {
     try {
-      const handle = await window.showSaveFilePicker({ suggestedName: defaultName, types: [{ description: 'SWMM Comparison Session', accept: { 'application/json': ['.sca'] } }] });
       const writable = await handle.createWritable();
       await writable.write(blob);
       await writable.close();
       setStatus("Session saved.");
-    } catch (err) { if (err.name !== 'AbortError') console.error("Save failed:", err); }
+    } catch (err) { console.error("Save failed:", err); }
   } else {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a'); a.href = url; a.download = defaultName; a.click(); URL.revokeObjectURL(url);
